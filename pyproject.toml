@@ -24,7 +24,7 @@ omit = [
     "services/gateway/*",                    # requer servidor + JWT — testar em E2E
     "services/scoring/engine/model.py",      # substituído por engines.py (SEAMS)
     "services/compliance/*",
-    "services/ingest/*",
+    "services/ingest/tasks/*",   # tarefas Celery — requerem broker, testar em integração
     "services/taxpredict/*",
     "services/audit/crosscheck/*",
 ]
