@@ -46,14 +46,18 @@ class TestRateLimit:
             resp = client.get("/ping")
             assert resp.status_code == 200
 
-    def test_101a_request_retorna_429(self):
+    def test_101a_request_retorna_429(self, monkeypatch):
+        monkeypatch.setattr(mw_module.time, "time", lambda: 0.0)
+        _reset_counts()
         _, client = _make_app()
         for _ in range(100):
             client.get("/ping")
         resp = client.get("/ping")
         assert resp.status_code == 429
 
-    def test_resposta_429_e_problem_json(self):
+    def test_resposta_429_e_problem_json(self, monkeypatch):
+        monkeypatch.setattr(mw_module.time, "time", lambda: 0.0)
+        _reset_counts()
         _, client = _make_app()
         for _ in range(101):
             resp = client.get("/ping")
@@ -63,15 +67,19 @@ class TestRateLimit:
         assert "type" in body
         assert "detail" in body
 
-    def test_429_tem_retry_after(self):
+    def test_429_tem_retry_after(self, monkeypatch):
+        monkeypatch.setattr(mw_module.time, "time", lambda: 0.0)
+        _reset_counts()
         _, client = _make_app()
         for _ in range(101):
             resp = client.get("/ping")
         assert "Retry-After" in resp.headers
         assert resp.headers["Retry-After"] == "60"
 
-    def test_tenant_a_nao_afeta_tenant_b(self):
+    def test_tenant_a_nao_afeta_tenant_b(self, monkeypatch):
         """Rate limit é por tenant, não global."""
+        monkeypatch.setattr(mw_module.time, "time", lambda: 0.0)
+        _reset_counts()
         _, client_a = _make_app(tenant_id="tenant-a")
         _, client_b = _make_app(tenant_id="tenant-b")
 

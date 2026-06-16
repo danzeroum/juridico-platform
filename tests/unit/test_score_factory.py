@@ -65,6 +65,49 @@ def test_python_engine_healthy():
 
 
 # ---------------------------------------------------------------------------
+# _classify() — cobre BAIXO / MODERADO / ALTO / CRITICO via coeficiente forçado
+# ---------------------------------------------------------------------------
+
+def _engine_with_intercept(intercept: float):
+    from services.scoring.engine.engines import PythonScoreEngine
+    def loader(cnae):
+        return {"intercept": intercept, "sigma": 0.0}
+    return PythonScoreEngine(coefficient_loader=loader)
+
+
+def test_classify_baixo():
+    from services.shared.contracts.scoring import ScoreRequest
+    engine = _engine_with_intercept(850.0)
+    r = engine.score(ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={}))
+    assert r.risk_level == "BAIXO"
+    assert r.score == 850
+
+
+def test_classify_moderado():
+    from services.shared.contracts.scoring import ScoreRequest
+    engine = _engine_with_intercept(650.0)
+    r = engine.score(ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={}))
+    assert r.risk_level == "MODERADO"
+    assert r.score == 650
+
+
+def test_classify_alto():
+    from services.shared.contracts.scoring import ScoreRequest
+    engine = _engine_with_intercept(500.0)
+    r = engine.score(ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={}))
+    assert r.risk_level == "ALTO"
+    assert r.score == 500
+
+
+def test_classify_critico():
+    from services.shared.contracts.scoring import ScoreRequest
+    engine = _engine_with_intercept(200.0)
+    r = engine.score(ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={}))
+    assert r.risk_level == "CRITICO"
+    assert r.score == 200
+
+
+# ---------------------------------------------------------------------------
 # _FallbackEngine — testado diretamente com mocks
 # ---------------------------------------------------------------------------
 
