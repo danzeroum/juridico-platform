@@ -216,13 +216,21 @@ async def score_company(
         # subject_token: AES-256-GCM por titular (crypto-shredding via erase_titular)
         pseudonym = hash_user_id(body.cnpj)
         subject_token = encrypt_for_ledger(pseudonym, tenant_id)
-        _ledger.add_entry(
+        ledger_entry = _ledger.add_entry(
             request_id=request_id,
             product="legalscore",
             inputs=inputs_for_ledger,
             outputs=outputs_for_ledger,
             sources=sources,
             subject_token=subject_token,
+        )
+        from services.shared.audit_log import log_ledger_write  # noqa: PLC0415
+        log_ledger_write(
+            request_id=request_id,
+            product="legalscore",
+            tenant_id=tenant_id,
+            entry_index=ledger_entry["entry_index"],
+            has_subject_token=True,
         )
 
         if idempotency_key and redis:

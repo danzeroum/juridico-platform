@@ -39,6 +39,8 @@ import threading
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from services.shared.audit_log import log_pii_decrypt, log_pii_erase
+
 _KEY_STORE: dict[str, bytes] = {}
 _STORE_LOCK = threading.Lock()
 
@@ -99,7 +101,9 @@ def decrypt_from_ledger(token: str, pseudonym: str, tenant_id: str) -> str:
     raw = base64.urlsafe_b64decode(token.encode())
     iv, ciphertext_and_tag = raw[:12], raw[12:]
     aesgcm = AESGCM(key)
-    return aesgcm.decrypt(iv, ciphertext_and_tag, None).decode()
+    result = aesgcm.decrypt(iv, ciphertext_and_tag, None).decode()
+    log_pii_decrypt(pseudonym=pseudonym, tenant_id=tenant_id)
+    return result
 
 
 def erase_titular(pseudonym: str, tenant_id: str) -> bool:
@@ -118,6 +122,7 @@ def erase_titular(pseudonym: str, tenant_id: str) -> bool:
     with _STORE_LOCK:
         existed = kid in _KEY_STORE
         _KEY_STORE.pop(kid, None)
+    log_pii_erase(pseudonym=pseudonym, tenant_id=tenant_id, existed=existed)
     return existed
 
 
