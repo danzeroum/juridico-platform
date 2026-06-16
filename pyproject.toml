@@ -9,6 +9,10 @@ addopts = [
     "--strict-markers",
     "-q",
 ]
+markers = [
+    "integration: testes que requerem banco de dados real (Postgres/PgBouncer)",
+    "e2e: testes end-to-end que requerem o stack completo Docker",
+]
 
 [tool.coverage.run]
 source = ["services"]
@@ -19,6 +23,7 @@ omit = [
     # Módulos de Fase 1+ (sem testes unitários ainda)
     "services/shared/ai/*",
     "services/shared/db.py",
+    "services/shared/tenant_db.py",  # requer PgBouncer — testar em integração
     "services/shared/redis_client.py",
     "services/shared/alerts/publishers.py",  # requer PG — testar em integração
     "services/gateway/*",                    # requer servidor + JWT — testar em E2E

@@ -2,6 +2,61 @@
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
 > Atualizado em: 2026-06-16
+>
+> **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
+> A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
+> os gates de P0 não fecharem.
+
+---
+
+## STATUS DAS FASES — DUAS COLUNAS
+
+| Fase | Código merged / CI verde | DoD verde (pronto) |
+|---|---|---|
+| 0 — Segurança/Infra | ✅ PR #3 | ⚠️ P0-2 (restore não testado), P0-3 (crypto-shredding) em aberto |
+| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4 (rate-limit/idemp/RLS sem teste) |
+| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4 |
+| 3a — ComplianceRadar | ✅ PR #6 | ⚠️ P0-1, P0-4 (lag SNIS 548d não exposto no payload) |
+| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4 (validação modelo / rótulo heurística) |
+| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4 |
+
+---
+
+## P0 — Bloqueadores de DoD (nenhum produto fica "pronto" sem estes)
+
+### P0-1 — SLA não foi medido validamente
+**Arquivo:** `tests/load/locustfile.py` (corrigido neste PR), `Makefile` (`load-test`)  
+**Problema:** A versão anterior marcava 401/403 como sucesso e usava CNPJ sintético sem token — media o caminho de rejeição de auth, não o cálculo. Corrigido: agora autentica, usa JWT real, trata 401/403/5xx como falha.  
+**Ação restante:** Semear dados de ingestão, rodar em ambiente representativo (não CI), commitar `tests/load/report.html` com p95 medido.  
+**Aceite:** relatório commitado; LegalScore score p95 < 1,5s; batch 1k < 30s; erro < 0,1%.
+
+### P0-2 — Backup com restore não testado
+**Arquivo:** `infra/scripts/backup.sh`, `Makefile` (`backup`)  
+**Problema:** Script existe, restore nunca executado. Gate da Fase 0 aberto.  
+**Ação:** Executar backup (PG + Neo4j + MinIO), enviar offsite, restaurar em VM limpa, reexecutar `verify_integrity()` sobre entradas do ledger restaurado.  
+**Aceite:** log do restore + raiz Merkle idêntica pós-restore commitados; procedimento no playbook.
+
+### P0-3 — Crypto-shredding (right-to-erasure) não implementado
+**Arquivo:** `services/shared/ledger/merkle.py` (campo `subject_token` existe), helper AES a criar  
+**Problema:** O design e o campo existem, mas o mecanismo (cifrar pseudônimo com AES-256-GCM por titular; apagar = destruir a chave no KMS) e o teste não aparecem implementados.  
+**Ação:** (1) Cifrador por titular: `subject_token = AES-256-GCM(pseudonimo, chave_do_titular)`. (2) Operação de apagamento = destruição da chave no KMS. (3) Nenhum HMAC em claro persistido.  
+**Aceite:** teste que, após apagar a chave, `subject_token` fica irrecuperável mas `verify_integrity()` continua True.
+
+### P0-4 — DoD por produto: itens presentes mas sem teste que comprove
+**Arquivo:** suites em `tests/` por serviço  
+**Ação — confirmar (ou criar) teste para cada item, por produto:**
+- [ ] Rate limit por tenant: 101ª req → `429` com `Retry-After`
+- [ ] Idempotência: `Idempotency-Key` repetida em 24h → mesmo resultado sem recálculo e sem 2ª entrada no Ledger
+- [ ] `problem+json` em **todos** os endpoints de erro (não só no de referência)
+- [ ] OpenAPI 3.1 com exemplos de sucesso **e** erro por endpoint
+- [ ] **Isolamento de tenant sob reuso de pool** → `tests/integration/test_tenant_isolation.py` (criado neste PR; requer banco para rodar)
+- [ ] MinIO: acesso anônimo a qualquer bucket → `403`
+- [ ] `source_date` + `lag_days` no payload de toda saída com lag (crítico: ComplianceRadar SNIS 548d)
+- [ ] Audit trail de acesso a dados pessoais
+- [ ] E2E por produto com Docker real; contrato por fronteira SEAMS
+- [ ] OTel span + métricas Prometheus em **todas** as fronteiras (não só no endpoint de referência)
+- [ ] Playbook de incidentes por produto  
+**Aceite:** cada checkbox com teste nomeado correspondente verde no CI.
 
 ---
 
@@ -144,25 +199,27 @@
 
 ---
 
-## ROADMAP COMPLETO — RESUMO FINAL (2026-06-16)
+## ROADMAP — CÓDIGO COMPLETO; DoD PENDENTE
 
-Todas as fases do roadmap estão implementadas e mergeadas no main.
+Todas as 6 fases têm código merged e CI verde. **Nenhum produto está "pronto"
+pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 
-| Fase | Status | PR | Coverage |
-|---|---|---|---|
-| Fase 0 (Segurança + Infra) | ✅ merged | #3 | — |
-| Fase 1 (LegalScore PJ) | ✅ merged | #4 | 85% / 118 testes |
-| Fase 2 (ContabilIA) | ✅ merged | #5 | 91.5% / 221 testes |
-| Fase 3a (ComplianceRadar) | ✅ merged | #6 | 91.9% / 261 testes |
-| Fase 3b (TaxPredict) | ✅ merged | #7 | 91.98% / 271 testes |
-| Fase 4 (LicitaWatch/PetiBot/ConciliaIA) | ✅ merged | #8 | 93.16% / 351 testes |
+| Fase | PR | Coverage | Código/CI | DoD |
+|---|---|---|---|---|
+| 0 — Segurança/Infra | #3 | — | ✅ | ⚠️ P0-2, P0-3 |
+| 1 — LegalScore PJ | #4 | 85% / 118 testes | ✅ | ⚠️ P0-1, P0-4 |
+| 2 — ContabilIA | #5 | 91.5% / 221 testes | ✅ | ⚠️ P0-1, P0-4 |
+| 3a — ComplianceRadar | #6 | 91.9% / 261 testes | ✅ | ⚠️ P0-1, P0-4 |
+| 3b — TaxPredict | #7 | 91.98% / 271 testes | ✅ | ⚠️ P0-1, P0-4, P2-3 |
+| 4 — LicitaWatch/PetiBot/ConciliaIA | #8 | 93.16% / 351 testes | ✅ | ⚠️ P0-1, P0-4 |
 
-### Pendências remanescentes bloqueadas por decisões externas
+**Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
-1. **DanoBot** — implementação completa bloqueada por **PD-06** (DATASUS = dado sensível LGPD art. 11). Atualmente retorna 501. Desbloqueia com parecer DPO.
-2. **K8s migration** — condicional a gatilhos medidos (p95 > 2s p/ 1k CNPJs → Rust; >70% CPU sustentado → K8s). Nenhum gatilho atingido ainda.
-3. **PNCP ingest task** (Celery) — contrato pncp.py criado; tarefa de ingestão agendada não implementada. Baixa prioridade — pode ser feita em sprint separado.
-4. **PD-01** Neo4j licença, **PD-02** domínio TLS, **PD-03** IdP JWT, **PD-04** backup restore testado, **PD-05** KMS real — ver seções acima.
+### Pendências bloqueadas por decisões externas
+
+1. **DanoBot** — 501 placeholder. Desbloqueia com parecer DPO (PD-06).
+2. **K8s migration** — condicional: p95 > 2s → Rust; >70% CPU sustentado → K8s. Nenhum gatilho atingido.
+3. **PNCP ingest task** (Celery) — contrato criado; tarefa agendada não implementada. Baixa prioridade.
 
 ---
 
