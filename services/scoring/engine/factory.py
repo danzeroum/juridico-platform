@@ -18,13 +18,13 @@ trafego). Fallback e health check sao complementares, nao substitutos.
 """
 from __future__ import annotations
 
+from services.scoring.engine.engines import PythonScoreEngine, RustScoreEngine
 from services.shared.contracts.scoring import (
     ScoreEngine,
     ScoreRequest,
     ScoreResult,
     ScoringUnavailable,
 )
-from services.scoring.engine.engines import PythonScoreEngine, RustScoreEngine
 
 
 class _FallbackEngine:

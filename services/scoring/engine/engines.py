@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from services.shared.contracts.scoring import (
     RiskLevel,
-    ScoreEngine,
     ScoreRequest,
     ScoreResult,
     ScoringUnavailable,

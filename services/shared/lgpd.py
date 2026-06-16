@@ -15,8 +15,8 @@ Para provisionar a chave em Docker Compose:
     echo $(openssl rand -hex 32) | docker secret create HMAC_KEY -
 """
 
-import hmac
 import hashlib
+import hmac
 import re
 from typing import Any
 

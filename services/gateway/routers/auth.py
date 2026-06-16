@@ -63,12 +63,12 @@ async def login(request: LoginRequest) -> TokenResponse:
     Em produção, validar contra a tabela tenant.users.
     """
     try:
-        from services.gateway.auth.jwt import issue_token, TOKEN_EXPIRY_SECONDS
+        from services.gateway.auth.jwt import TOKEN_EXPIRY_SECONDS, issue_token
     except ImportError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Serviço de autenticação indisponível.",
-        )
+        ) from None
 
     # TODO (Fase 1): validar request.username + request.password contra tenant.users
     # Por ora: aceitar dev-tenant sem validação de senha (SOMENTE em dev)

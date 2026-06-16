@@ -1,5 +1,5 @@
 """Health check endpoint — público, sem autenticação."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 
@@ -31,5 +31,5 @@ async def health() -> dict:
         "status": "healthy",
         "service": "gateway",
         "version": "0.2.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }

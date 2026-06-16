@@ -10,11 +10,12 @@ Rode com: pytest services/shared/alerts/tests/test_alert_contract.py
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import jsonschema
 import pytest
+from pydantic import ValidationError
 
 from services.shared.contracts.alerts import (
     ALERT_CONTRACT_VERSION,
@@ -40,7 +41,7 @@ def _envelope(**overrides) -> AlertEnvelope:
         subject_ref={"municipio_ibge": "3550308"},
         payload={"delta_arrecadacao_yoy": -0.27, "z_score": 3.2},
         channels=[Channel.WEBHOOK, Channel.EMAIL],
-        occurred_at=datetime(2026, 6, 16, 12, 0, tzinfo=timezone.utc),
+        occurred_at=datetime(2026, 6, 16, 12, 0, tzinfo=UTC),
     )
     base.update(overrides)
     return AlertEnvelope(**base)
@@ -74,9 +75,9 @@ def test_channels_nao_vazio(schema):
 def test_campo_desconhecido_rejeitado():
     # extra="forbid" no Pydantic + additionalProperties:false no schema:
     # ambos os lados recusam campos nao previstos (evita drift silencioso).
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         AlertEnvelope(
             alert_id="x", dedup_key="y", rule_id="z", severity=Severity.LOW,
-            channels=[Channel.WEBHOOK], occurred_at=datetime.now(timezone.utc),
+            channels=[Channel.WEBHOOK], occurred_at=datetime.now(UTC),
             campo_fantasma="oops",
         )

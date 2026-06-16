@@ -19,7 +19,7 @@ banco, numpy arrays internos, etc.) atravessando esta linha.
 """
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 CONTRACT_VERSION = "scoring/v1"
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     BAIXO = "BAIXO"
     MODERADO = "MODERADO"
     ALTO = "ALTO"
@@ -60,7 +60,7 @@ class ScoreResult(BaseModel):
     contract_version: str = CONTRACT_VERSION
 
     @model_validator(mode="after")
-    def _check_ci(self) -> "ScoreResult":
+    def _check_ci(self) -> ScoreResult:
         lo, hi = self.confidence_interval
         if lo > hi:
             raise ValueError("confidence_interval invalido: lower > upper")

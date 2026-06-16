@@ -46,14 +46,14 @@ class TaxPredictionModel:
     # ------------------------------------------------------------------
     # Treinamento — executar SOMENTE via Celery Beat, nunca por request
     # ------------------------------------------------------------------
-    def fit(self, data: "pd.DataFrame") -> None:  # type: ignore[name-defined]
+    def fit(self, data: Any) -> None:
         """
         Treina o modelo com MCMC. Salvar o trace com save_to_minio() após o fit.
         NÃO chamar em request path — latência inaceitável (minutos).
         """
         try:
-            import pymc as pm
             import pandas as pd  # noqa: F401
+            import pymc as pm
         except ImportError as exc:
             raise ImportError("pymc e pandas são necessários para fit()") from exc
 
@@ -116,9 +116,8 @@ class TaxPredictionModel:
         """
         try:
             import arviz as az
-            import pymc as pm
         except ImportError as exc:
-            raise ImportError("arviz e pymc são necessários para load_from_minio()") from exc
+            raise ImportError("arviz é necessário para load_from_minio()") from exc
         data = minio_client.get_object(bucket, key).read()
         self._trace = az.from_netcdf(BytesIO(data))
         self._is_loaded = True

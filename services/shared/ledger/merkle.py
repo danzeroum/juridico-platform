@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -93,7 +93,7 @@ class DecisionLedger:
         entry: dict[str, Any] = {
             "request_id": request_id,
             "entry_index": len(self._entries),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "product": product,
             "inputs_hash": _sha256(json.dumps(inputs, sort_keys=True)),
             "outputs_hash": _sha256(json.dumps(outputs, sort_keys=True)),

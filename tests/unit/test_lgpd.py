@@ -7,7 +7,6 @@ Critérios de aceite da Fase 0:
 - Hash não derivável do SHA-256 puro do CPF sem a chave.
 """
 import hashlib
-import os
 import re
 
 import pytest

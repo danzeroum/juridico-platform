@@ -3,8 +3,6 @@
 # Cruza demonstracoes financeiras com 14 fontes de dados publicos
 # ----------------------------------------------------------------------------
 
-from typing import Dict, List
-
 
 CROSS_CHECK_RULES = {
     "CC01": {
@@ -31,7 +29,7 @@ CROSS_CHECK_RULES = {
 
 
 class CrossCheckEngine:
-    def run_checks(self, financials: Dict, public_data: Dict) -> List[Dict]:
+    def run_checks(self, financials: dict, public_data: dict) -> list[dict]:
         findings = []
         # TODO: implementar regras na Fase 2
         return findings

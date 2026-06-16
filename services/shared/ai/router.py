@@ -5,8 +5,8 @@ Custo zero para: classificacao, NER, embeddings (Llama3:8b + BGE-M3 via Ollama)
 API paga para: geracao de texto juridico, raciocinio complexo, sumarizacao
 """
 
-from enum import Enum
 import logging
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 

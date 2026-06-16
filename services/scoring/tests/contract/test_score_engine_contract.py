@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import pytest
 
+from services.scoring.engine.engines import PythonScoreEngine, RustScoreEngine
 from services.shared.contracts.scoring import (
     CONTRACT_VERSION,
     ScoreEngine,
     ScoreRequest,
 )
-from services.scoring.engine.engines import PythonScoreEngine, RustScoreEngine
 
 
 def available_engines() -> list[ScoreEngine]:

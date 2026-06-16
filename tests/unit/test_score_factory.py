@@ -8,8 +8,8 @@ import pytest
 
 
 def test_get_score_engine_python():
-    from services.scoring.engine.factory import get_score_engine
     from services.scoring.engine.engines import PythonScoreEngine
+    from services.scoring.engine.factory import get_score_engine
     engine = get_score_engine("python")
     assert isinstance(engine, PythonScoreEngine)
     assert engine.name == "python"
@@ -18,7 +18,6 @@ def test_get_score_engine_python():
 def test_get_score_engine_auto_sem_rust():
     """Sem crate Rust compilado, auto deve retornar PythonScoreEngine."""
     from services.scoring.engine.factory import get_score_engine
-    from services.scoring.engine.engines import PythonScoreEngine
     engine = get_score_engine("auto")
     # Em CI sem Rust, o resultado é Python diretamente
     assert engine.healthy()

@@ -14,7 +14,7 @@ envelope, que pode trafegar por filas, webhooks e logs.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,14 +22,14 @@ from pydantic import BaseModel, ConfigDict, Field
 ALERT_CONTRACT_VERSION = "alerts/v1"
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
 
 
-class Channel(str, Enum):
+class Channel(StrEnum):
     WEBHOOK = "webhook"
     EMAIL = "email"
     SLACK = "slack"

@@ -15,14 +15,10 @@ Todos os outros endpoints seguem este padrão.
 from __future__ import annotations
 
 import logging
-import uuid
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.openapi.utils import get_openapi
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from services.gateway.middleware import (
     JWTAuthMiddleware,
@@ -33,10 +29,9 @@ from services.gateway.middleware import (
 # OTel — graceful degradation se SDK não instalado
 try:
     from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     _OTEL_AVAILABLE = True
 except ImportError:
     _OTEL_AVAILABLE = False
@@ -124,7 +119,8 @@ app.add_middleware(RateLimitMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 # Registrar routers dos produtos
-from services.gateway.routers import health, auth, legalscore  # noqa: E402
+from services.gateway.routers import auth, health, legalscore  # noqa: E402
+
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1/auth")
 app.include_router(legalscore.router, prefix="/api/v1/legalscore")
@@ -148,9 +144,11 @@ def root() -> JSONResponse:
 @app.get("/.well-known/jwks.json", include_in_schema=False)
 def jwks() -> JSONResponse:
     try:
-        from services.gateway.auth.jwt import get_public_key_pem
+        import base64
+
         from cryptography.hazmat.primitives.serialization import load_pem_public_key
-        import base64, struct
+
+        from services.gateway.auth.jwt import get_public_key_pem
 
         pub_pem = get_public_key_pem().encode()
         pub_key = load_pem_public_key(pub_pem)

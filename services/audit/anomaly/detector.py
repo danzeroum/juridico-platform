@@ -35,7 +35,7 @@ class AnomalyDetector:
         self._is_fitted = False
         self._fallback_threshold: float | None = None
 
-    def fit(self, X_train: np.ndarray) -> "AnomalyDetector":
+    def fit(self, X_train: np.ndarray) -> AnomalyDetector:
         """
         Treina em dados históricos. Deve ser chamado ANTES de detect().
         Em produção, chamar periodicamente via Celery Beat (não em cada request).

@@ -3,7 +3,6 @@
 # MLR custom por CNAE de 2 digitos
 # ----------------------------------------------------------------------------
 
-from typing import Dict
 
 
 class LegalScoreModel:
@@ -11,7 +10,7 @@ class LegalScoreModel:
         self.cnae = cnae_2digit
         self.coefficients = self._load_coefficients(cnae_2digit)
 
-    def _load_coefficients(self, cnae_2digit: str) -> Dict[str, float]:
+    def _load_coefficients(self, cnae_2digit: str) -> dict[str, float]:
         # TODO: carregar coeficientes calibrados via Delphi method + dados publicos
         return {
             "intercept": 500,

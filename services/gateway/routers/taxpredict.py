@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
 # TODO: implementar na Fase 3
 
 router = APIRouter()

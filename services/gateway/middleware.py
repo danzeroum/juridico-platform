@@ -17,8 +17,8 @@ ORDEM DOS MIDDLEWARES (do mais externo para o mais interno):
 """
 from __future__ import annotations
 
-import time
 import logging
+import time
 from typing import Any
 
 from fastapi import Request, Response

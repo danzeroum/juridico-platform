@@ -1,4 +1,5 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
 # TODO: implementar na Fase 2
 
 router = APIRouter()
