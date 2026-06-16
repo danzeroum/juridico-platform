@@ -113,7 +113,7 @@ def _rag_lookup(descricao: str, materia: str) -> list[JurisprudenciaHit]:
 
 
 @router.post(
-    "/taxpredict/predict",
+    "/predict",
     summary="Predição probabilística de desfecho tributário",
     responses={
         200: {

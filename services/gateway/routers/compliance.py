@@ -114,7 +114,7 @@ def _build_summary(cod_ibge: str, r) -> dict:
 
 
 @router.get(
-    "/compliance/municipalities",
+    "/municipalities",
     summary="Lista municípios monitorados",
     responses={
         200: {
@@ -203,7 +203,7 @@ async def list_municipalities(
 
 
 @router.get(
-    "/compliance/municipality/{ibge_code}",
+    "/municipality/{ibge_code}",
     summary="Indicadores detalhados de um município",
     responses={
         200: {
@@ -271,7 +271,7 @@ async def municipality_detail(ibge_code: str) -> JSONResponse:
             ) from exc
 
 
-@router.get("/compliance/alerts")
+@router.get("/alerts")
 async def list_alerts(
     severity: str | None = Query(None, description="Filtrar: LOW|MEDIUM|HIGH|CRITICAL"),
     page: int = Query(1, ge=1),
@@ -306,7 +306,7 @@ async def list_alerts(
         raise HTTPException(status_code=503, detail=_cache_error("/api/v1/compliance/alerts")) from exc
 
 
-@router.post("/compliance/municipality/{ibge_code}/evaluate")
+@router.post("/municipality/{ibge_code}/evaluate")
 async def evaluate_municipality(ibge_code: str) -> JSONResponse:
     """
     Avalia regras de compliance para um município agora.

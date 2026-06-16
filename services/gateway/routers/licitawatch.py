@@ -37,7 +37,7 @@ def _get_redis():
     return redis_lib.from_url(_REDIS_URL, decode_responses=True)
 
 
-@router.get("/licitawatch/contratos/{cnpj_orgao}")
+@router.get("/contratos/{cnpj_orgao}")
 async def list_contratos(
     cnpj_orgao: str,
     referencia: str = Query(..., description="Ano de referência (YYYY)"),
@@ -75,7 +75,7 @@ async def list_contratos(
             return JSONResponse({"cnpj_orgao": cnpj_orgao, "referencia": referencia, "contratos": [], "total": 0})
 
 
-@router.post("/licitawatch/orgao/{cnpj_orgao}/evaluate")
+@router.post("/orgao/{cnpj_orgao}/evaluate")
 async def evaluate_orgao(
     cnpj_orgao: str,
     referencia: str = Query(..., description="Ano de referência (YYYY)"),

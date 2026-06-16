@@ -28,7 +28,7 @@ except ImportError:
 
 
 @router.post(
-    "/petibot/assemble",
+    "/assemble",
     summary="Monta estrutura de petição jurídica",
     responses={
         200: {

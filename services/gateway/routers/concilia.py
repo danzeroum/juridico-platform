@@ -71,7 +71,7 @@ def _get_legalscore(cnpj: str | None) -> int | None:
 
 
 @router.post(
-    "/concilia/recommend",
+    "/recommend",
     summary="Recomenda faixa de acordo",
     responses={
         200: {
