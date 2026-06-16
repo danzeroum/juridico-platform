@@ -7,13 +7,10 @@ Cache Redis: chave pncp:{cnpj_orgao}:{ano}:{numero_controle}, TTL 24h.
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime as dt
 
 import requests
-from celery.utils.log import get_task_logger
-from ingest.celery_app import app
 from pydantic import ValidationError
 
 from services.ingest.contracts.pncp import (
@@ -24,24 +21,34 @@ from services.ingest.contracts.pncp import (
 from services.ingest.pipeline.base import get_circuit_breaker, reconcile
 from services.shared.config import settings
 
-logger = get_task_logger(__name__)
+# Celery disponível apenas em runtime (não em test env sem infraestrutura)
+try:
+    from celery.utils.log import get_task_logger
+    from ingest.celery_app import app as _celery_app
+
+    logger = get_task_logger(__name__)
+    _CELERY = True
+except (ImportError, ModuleNotFoundError):
+    logger = logging.getLogger(__name__)
+    _celery_app = None  # type: ignore[assignment]
+    _CELERY = False
 
 PNCP_BASE_URL = "https://pncp.gov.br/api/pncp/v1"
 CACHE_TTL = 60 * 60 * 24  # 24 horas
 _PAGE_SIZE = 500
 
 _MODALIDADE_MAP: dict[str, str] = {
-    "Pregão Eletrônico":        Modalidade.PREGAO_ELETRONICO,
-    "Pregão Presencial":        Modalidade.PREGAO_PRESENCIAL,
-    "Concorrência Eletrônica":  Modalidade.CONCORRENCIA,
-    "Concorrência":             Modalidade.CONCORRENCIA,
-    "Tomada de Preços":         Modalidade.TOMADA_PRECOS,
-    "Convite":                  Modalidade.CONVITE,
-    "Dispensa":                 Modalidade.DISPENSA,
-    "Dispensa de Licitação":    Modalidade.DISPENSA,
-    "Inexigibilidade":          Modalidade.INEXIGIBILIDADE,
-    "Leilão Eletrônico":        Modalidade.LEILAO,
-    "Leilão":                   Modalidade.LEILAO,
+    "Pregão Eletrônico":       Modalidade.PREGAO_ELETRONICO,
+    "Pregão Presencial":       Modalidade.PREGAO_PRESENCIAL,
+    "Concorrência Eletrônica": Modalidade.CONCORRENCIA,
+    "Concorrência":            Modalidade.CONCORRENCIA,
+    "Tomada de Preços":        Modalidade.TOMADA_PRECOS,
+    "Convite":                 Modalidade.CONVITE,
+    "Dispensa":                Modalidade.DISPENSA,
+    "Dispensa de Licitação":   Modalidade.DISPENSA,
+    "Inexigibilidade":         Modalidade.INEXIGIBILIDADE,
+    "Leilão Eletrônico":       Modalidade.LEILAO,
+    "Leilão":                  Modalidade.LEILAO,
 }
 
 
@@ -109,34 +116,27 @@ def _raw_to_bronze_dict(raw: dict, cnpj_orgao: str, ano: str) -> dict | None:
         objeto = "Objeto não informado"
 
     return {
-        "numero_controle":  str(numero),
-        "cnpj_orgao":       cnpj_orgao,
-        "cnpj_fornecedor":  raw.get("niFornecedor"),
-        "objeto":           objeto,
-        "modalidade":       _map_modalidade(modalidade_nome),
-        "valor_contrato":   float(raw.get("valorGlobal") or raw.get("valorContrato") or 0),
-        "data_publicacao":  raw.get("dataPublicacaoPncp") or raw.get("dataPublicacao") or f"{ano}-01-01",
-        "data_abertura":    raw.get("dataAberturaPropostas"),
-        "num_propostas":    raw.get("quantidadePropostasRecebidas"),
+        "numero_controle": str(numero),
+        "cnpj_orgao":      cnpj_orgao,
+        "cnpj_fornecedor": raw.get("niFornecedor"),
+        "objeto":          objeto,
+        "modalidade":      _map_modalidade(modalidade_nome),
+        "valor_contrato":  float(raw.get("valorGlobal") or raw.get("valorContrato") or 0),
+        "data_publicacao": raw.get("dataPublicacaoPncp") or raw.get("dataPublicacao") or f"{ano}-01-01",
+        "data_abertura":   raw.get("dataAberturaPropostas"),
+        "num_propostas":   raw.get("quantidadePropostasRecebidas"),
     }
 
 
-@app.task(bind=True, max_retries=3, default_retry_delay=300)
-def run_daily_ingest(self, cnpj_orgao: str, ano: int | None = None) -> dict:
+def _ingest_pncp(cnpj_orgao: str, ano_str: str, redis_client) -> dict:
     """
-    Ingest diário PNCP para um órgão público.
+    Lógica central de ingestão PNCP — testável sem Celery.
 
-    cnpj_orgao: CNPJ de 14 dígitos do órgão público
-    ano: exercício (ex: 2024). Padrão: ano corrente.
+    Busca contratos do PNCP, transforma bronze→silver e armazena no Redis.
+    Retorna dicionário de reconciliação com records_in, records_out, rejected.
     """
-    import redis as redis_lib
-
-    ano = ano or dt.now().year
-    ano_str = str(ano)
     data_inicial = f"{ano_str}-01-01"
     data_final = f"{ano_str}-12-31"
-
-    r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
 
     records_in = 0
     records_out = 0
@@ -160,15 +160,13 @@ def run_daily_ingest(self, cnpj_orgao: str, ano: int | None = None) -> dict:
                     continue
                 bronze = PncpContratoBronze(**bronze_dict)
             except (ValidationError, TypeError, ValueError) as exc:
-                logging.warning(
-                    "PNCP bronze inválido cnpj=%s: %s", cnpj_orgao, exc
-                )
+                logging.warning("PNCP bronze inválido cnpj=%s: %s", cnpj_orgao, exc)
                 rejected += 1
                 continue
 
             silver = pncp_bronze_to_silver(bronze)
             cache_key = _cache_key(cnpj_orgao, ano_str, silver.numero_controle)
-            r.setex(cache_key, CACHE_TTL, silver.model_dump_json())
+            redis_client.setex(cache_key, CACHE_TTL, silver.model_dump_json())
             records_out += 1
 
         pagina += 1
@@ -178,3 +176,22 @@ def run_daily_ingest(self, cnpj_orgao: str, ano: int | None = None) -> dict:
     recon["cnpj_orgao"] = cnpj_orgao
     logger.info("PNCP ingest cnpj=%s/%s: %s", cnpj_orgao, ano_str, recon)
     return recon
+
+
+if _CELERY:
+    @_celery_app.task(bind=True, max_retries=3, default_retry_delay=300)
+    def run_daily_ingest(self, cnpj_orgao: str, ano: int | None = None) -> dict:
+        """Ingest diário PNCP para um órgão público (Celery task)."""
+        import redis as redis_lib
+
+        ano_val = ano or dt.now().year
+        r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
+        return _ingest_pncp(cnpj_orgao, str(ano_val), r)
+else:
+    def run_daily_ingest(cnpj_orgao: str, ano: int | None = None) -> dict:  # type: ignore[misc]
+        """Ingest diário PNCP (fallback sem Celery — uso em dev/test)."""
+        import redis as redis_lib
+
+        ano_val = ano or dt.now().year
+        r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
+        return _ingest_pncp(cnpj_orgao, str(ano_val), r)
