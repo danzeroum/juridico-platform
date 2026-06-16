@@ -60,5 +60,21 @@ class _Settings:
     def HMAC_KEY(self) -> str:
         return load_secret("hmac_key") or os.getenv("HMAC_KEY", "")
 
+    @property
+    def MINIO_URL(self) -> str:
+        return os.getenv("MINIO_URL", "http://minio:9000")
+
+    @property
+    def MINIO_ACCESS_KEY(self) -> str:
+        return load_secret("minio_access_key") or os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+
+    @property
+    def MINIO_SECRET_KEY(self) -> str:
+        return load_secret("minio_secret_key") or os.getenv("MINIO_SECRET_KEY", "minioadmin")
+
+    @property
+    def OLLAMA_URL(self) -> str:
+        return os.getenv("OLLAMA_URL", "http://ollama:11434")
+
 
 settings = _Settings()
