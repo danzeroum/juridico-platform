@@ -17,9 +17,18 @@ from services.shared.contracts.petibot import PetiRequest
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# OTel — graceful degradation
+try:
+    from opentelemetry import trace as otel_trace
+    _tracer = otel_trace.get_tracer("petibot")
+    _OTEL = True
+except ImportError:
+    _OTEL = False
+    _tracer = None  # type: ignore[assignment]
+
 
 @router.post(
-    "/petibot/assemble",
+    "/assemble",
     summary="Monta estrutura de petição jurídica",
     responses={
         200: {
@@ -63,5 +72,14 @@ async def assemble(case: PetiRequest) -> JSONResponse:
     Fase 4: retorna template (sem geração LLM).
     Precedentes via ChromaDB; degradação graciosa se offline.
     """
-    response = assemble_petition(case)
-    return JSONResponse(content=response.model_dump(), status_code=200)
+    ctx_manager = _tracer.start_as_current_span("petibot.assemble") if _OTEL else _noop_span()
+    with ctx_manager as span:
+        if _OTEL and span:
+            span.set_attribute("tipo_acao", case.tipo_acao.value)
+        response = assemble_petition(case)
+        return JSONResponse(content=response.model_dump(), status_code=200)
+
+
+class _noop_span:
+    def __enter__(self): return None
+    def __exit__(self, *_): pass

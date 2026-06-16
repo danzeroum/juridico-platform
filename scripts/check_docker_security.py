@@ -47,14 +47,34 @@ def _is_db_port_exposed(service_name: str, ports: list) -> list[str]:
     return violations
 
 
+PROTECTED_BUCKETS = {"bronze", "silver", "gold", "documents", "backups"}
+
+
+def _check_minio_anonymous(compose_text: str) -> list[str]:
+    """Verifica que nenhum bucket MinIO tem acesso anônimo de download/public."""
+    violations = []
+    for line in compose_text.splitlines():
+        stripped = line.strip()
+        # Proibido: mc anonymous set download|public|upload
+        if "mc anonymous set" in stripped and "set none" not in stripped:
+            violations.append(f"minio: acesso anônimo proibido detectado: {stripped!r}")
+    # Verificar que todos os buckets protegidos têm 'set none'
+    for bucket in PROTECTED_BUCKETS:
+        expected = f"anonymous set none local/{bucket}"
+        if expected not in compose_text:
+            violations.append(f"minio: bucket '{bucket}' sem 'anonymous set none' no minio-init")
+    return violations
+
+
 def main() -> None:
     if not BASE_YML.exists():
         print(f"FALHA: {BASE_YML} não encontrado", file=sys.stderr)
         sys.exit(1)
 
     with BASE_YML.open(encoding="utf-8") as fh:
-        compose = yaml.safe_load(fh)
+        compose_text = fh.read()
 
+    compose = yaml.safe_load(compose_text)
     services = compose.get("services", {})
     all_violations: list[str] = []
 
@@ -66,12 +86,16 @@ def main() -> None:
             violations = _is_db_port_exposed(svc_name, ports)
             all_violations.extend(violations)
 
+    # Verificar MinIO anonymous access
+    all_violations.extend(_check_minio_anonymous(compose_text))
+
     if all_violations:
         for v in all_violations:
             print(f"FALHA: {v}", file=sys.stderr)
         sys.exit(1)
 
     print(f"OK: nenhuma porta de banco exposta no host em {BASE_YML.name}")
+    print("OK: MinIO sem acesso anônimo — todos os buckets com 'anonymous set none'")
 
 
 if __name__ == "__main__":

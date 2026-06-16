@@ -124,3 +124,60 @@ class TestBatchJobTracker:
         redis = _make_redis()
         # Não deve lançar exceção
         update_batch_progress(redis, "batch_ghost", 0, [], "done")
+
+
+class TestIdempotencyLedgerGate:
+    """Garante que cache hit impede 2ª entrada no Decision Ledger (DoD P0-4)."""
+
+    def test_second_call_with_same_key_skips_ledger(self):
+        """Idempotency-Key repetida em 24h → resultado do cache sem Ledger.add_entry."""
+        import asyncio
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from services.gateway.routers.legalscore import ScoreRequest, score_company
+        from services.scoring.idempotency import set_idempotency_result
+
+        redis = _make_redis()
+        tenant_id = "t_gate"
+        idemp_key = "test-gate-key-123"
+
+        # Simula 1ª chamada: resultado já em cache (24h TTL)
+        cached_payload = {
+            "cnpj": "12345678000195",
+            "score": 720,
+            "risk_level": "MODERADO",
+            "confidence_interval": [641, 799],
+            "breakdown": {},
+            "disclaimer": "heurística",
+            "request_id": "req_original_1",
+            "source_date": None,
+            "lag_days": None,
+            "engine": "python",
+            "contract_version": "scoring/v1",
+        }
+        set_idempotency_result(redis, tenant_id, idemp_key, cached_payload)
+
+        mock_request = MagicMock()
+        mock_request.state.tenant_id = tenant_id
+        mock_ledger = MagicMock()
+
+        # Injeta módulo redis_client falso (redis não está instalado no env de teste)
+        mock_redis_client_mod = MagicMock()
+        mock_redis_client_mod.get_redis.return_value = redis
+
+        with (
+            patch("services.gateway.routers.legalscore._ledger", mock_ledger),
+            patch.dict(sys.modules, {"services.shared.redis_client": mock_redis_client_mod}),
+        ):
+            result = asyncio.run(
+                score_company(
+                    body=ScoreRequest(cnpj="12345678000195"),
+                    request=mock_request,
+                    idempotency_key=idemp_key,
+                )
+            )
+
+        assert result.cnpj == "12345678000195"
+        assert result.request_id == "req_original_1"
+        mock_ledger.add_entry.assert_not_called()

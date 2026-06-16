@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter()
 
 
-@router.post("/danobot/predict")
+@router.post("/predict")
 async def predict() -> None:
     """Previsão de danos morais/materiais — bloqueado até PD-06."""
     raise HTTPException(

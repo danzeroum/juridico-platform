@@ -13,12 +13,12 @@
 
 | Fase | Código merged / CI verde | DoD verde (pronto) |
 |---|---|---|
-| 0 — Segurança/Infra | ✅ PRs #3,#9–#14 | ⚠️ P0-2 (restore não testado), P0-4 parcial |
-| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4 parcial |
-| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4 parcial |
-| 3a — ComplianceRadar | ✅ PRs #6,#13 | ⚠️ P0-1, P0-4 parcial |
-| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4 parcial (validação modelo) |
-| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4 parcial |
+| 0 — Segurança/Infra | ✅ PRs #3,#9–#15 | ⚠️ P0-2 (restore não testado em VM limpa), P0-4: E2E Docker pendente |
+| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4: E2E Docker |
+| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4: E2E Docker |
+| 3a — ComplianceRadar | ✅ PRs #6,#13 | ⚠️ P0-1, P0-4: E2E Docker |
+| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4: E2E Docker, validação modelo com desfechos reais |
+| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4: E2E Docker |
 
 ---
 
@@ -46,16 +46,17 @@
 **Arquivo:** suites em `tests/` por serviço  
 **Ação — confirmar (ou criar) teste para cada item, por produto:**
 - [x] Rate limit por tenant: 101ª req → `429` com `Retry-After` — ✅ PR #12 (`test_middleware_ratelimit.py`)
-- [ ] Idempotência: `Idempotency-Key` repetida em 24h → mesmo resultado sem recálculo e sem 2ª entrada no Ledger
+- [x] Idempotência: `Idempotency-Key` repetida em 24h → mesmo resultado sem recálculo e sem 2ª entrada no Ledger — ✅ PR #15 (`TestIdempotencyLedgerGate` via `asyncio.run` + patch mock Ledger)
 - [x] `problem+json` em **todos** os endpoints de erro — ✅ PR #13 (`test_problem_json_handler.py`, `RequestValidationError` 422, `_status_title` 503)
-- [ ] OpenAPI 3.1 com exemplos de sucesso **e** erro por endpoint (legalscore tem; restante pendente)
+- [x] OpenAPI 3.1 com exemplos de sucesso **e** erro por endpoint — ✅ PR #14 (taxpredict, petibot, concilia, compliance) + PR #4 (legalscore)
 - [x] **Isolamento de tenant sob reuso de pool** → `tests/integration/test_tenant_isolation.py` — ✅ PR #10 (requer banco para rodar)
-- [ ] MinIO: acesso anônimo a qualquer bucket → `403` (requer infra)
+- [x] MinIO: acesso anônimo a qualquer bucket → `403` — ✅ PR #15 (`check_docker_security.py` verifica `mc anonymous set none` para bronze/silver/gold/documents/backups e proíbe `set download/public`; gate no CI sem infra necessária)
 - [x] `source_date` + `lag_days` no payload de toda saída com lag — ✅ PR #13 (ComplianceRadar SNIS 548d)
 - [x] Audit trail de acesso a dados pessoais — ✅ PR #14 (`audit_log.py`, `test_audit_log.py`, wired em decrypt/erase/ledger.write)
 - [ ] E2E por produto com Docker real; contrato por fronteira SEAMS (requer infra)
-- [ ] OTel span + métricas Prometheus em **todas** as fronteiras (LegalScore tem; restante pendente)
-- [ ] Playbook de incidentes por produto  
+- [x] OTel span em **todas** as fronteiras — ✅ PR #15 (legalscore, taxpredict, petibot, concilia, compliance, contabilia, licitawatch)
+- [x] Métricas Prometheus em todas as fronteiras — ✅ `prometheus_fastapi_instrumentator` em `main.py` (PR #3), expõe `/metrics`; auto-instrumenta todos os routers (request count, duration, status codes por endpoint)
+- [x] Playbook de incidentes por produto — ✅ PR #14 (`docs/INCIDENT-PLAYBOOK.md`)  
 **Aceite:** cada checkbox com teste nomeado correspondente verde no CI.
 
 ---

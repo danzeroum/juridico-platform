@@ -33,6 +33,15 @@ from services.audit.crosscheck.engine import CrossCheckEngine, CrossCheckFinding
 
 router = APIRouter()
 
+# OTel — graceful degradation
+try:
+    from opentelemetry import trace as otel_trace
+    _tracer = otel_trace.get_tracer("contabilia")
+    _OTEL = True
+except ImportError:
+    _OTEL = False
+    _tracer = None  # type: ignore[assignment]
+
 _engine = CrossCheckEngine()
 
 ALLOWED_CONTENT_TYPES = {
@@ -144,42 +153,48 @@ async def upload_financials(
             },
         )
 
-    financials = _parse_dre_csv(content)
-    if not financials:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "type": "https://juridico.io/errors/dre-invalida",
-                "title": "DRE inválida",
-                "status": 422,
-                "detail": "Nenhum campo financeiro reconhecido no CSV. Verifique o formato.",
-                "instance": "/api/v1/contabilia/audit/upload",
-                "contract_version": "contabilia/v1",
-            },
-        )
+    ctx_manager = _tracer.start_as_current_span("contabilia.upload") if _OTEL else _noop_span()
+    with ctx_manager as span:
+        financials = _parse_dre_csv(content)
+        if not financials:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "type": "https://juridico.io/errors/dre-invalida",
+                    "title": "DRE inválida",
+                    "status": 422,
+                    "detail": "Nenhum campo financeiro reconhecido no CSV. Verifique o formato.",
+                    "instance": "/api/v1/contabilia/audit/upload",
+                    "contract_version": "contabilia/v1",
+                },
+            )
 
-    # Dados públicos (sem fonte real em Fase 2 — marcado como ausente)
-    public_data: dict = {}
+        if _OTEL and span:
+            span.set_attribute("fields.count", len(financials))
+            span.set_attribute("cnpj.present", cnpj is not None)
 
-    findings = _engine.run_checks(financials, public_data)
-    report_id = str(uuid.uuid4())
-    generated_at = datetime.now(UTC).isoformat()
+        # Dados públicos (sem fonte real em Fase 2 — marcado como ausente)
+        public_data: dict = {}
 
-    report = {
-        "report_id": report_id,
-        "generated_at": generated_at,
-        "cnpj": cnpj,
-        "filename": file.filename,
-        "status": "CONCLUIDO",
-        "summary": _severity_summary(findings),
-        "total_findings": len(findings),
-        "findings": _findings_to_dict(findings),
-        "fields_analyzed": list(financials.keys()),
-        "data_lag_note": "Dados públicos (CAGED/SICONFI) não consultados nesta versão — cross-checks CC01/CC02 requerem ingest prévio.",
-        "contract_version": "contabilia/v1",
-    }
+        findings = _engine.run_checks(financials, public_data)
+        report_id = str(uuid.uuid4())
+        generated_at = datetime.now(UTC).isoformat()
 
-    return JSONResponse(content=report, status_code=200)
+        report = {
+            "report_id": report_id,
+            "generated_at": generated_at,
+            "cnpj": cnpj,
+            "filename": file.filename,
+            "status": "CONCLUIDO",
+            "summary": _severity_summary(findings),
+            "total_findings": len(findings),
+            "findings": _findings_to_dict(findings),
+            "fields_analyzed": list(financials.keys()),
+            "data_lag_note": "Dados públicos (CAGED/SICONFI) não consultados nesta versão — cross-checks CC01/CC02 requerem ingest prévio.",
+            "contract_version": "contabilia/v1",
+        }
+
+        return JSONResponse(content=report, status_code=200)
 
 
 @router.get("/audit/{report_id}")
@@ -202,3 +217,8 @@ async def get_report(report_id: str) -> JSONResponse:
             "contract_version": "contabilia/v1",
         },
     )
+
+
+class _noop_span:
+    def __enter__(self): return None
+    def __exit__(self, *_): pass
