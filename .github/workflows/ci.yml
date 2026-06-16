@@ -31,7 +31,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # Core deps para testes
           pip install \
             pydantic==2.9.2 \
             scikit-learn==1.5.2 \
@@ -41,9 +40,9 @@ jobs:
             fastapi==0.115.0 \
             pytest==8.3.3 \
             pytest-cov==5.0.0 \
-            pytest-asyncio==0.24.0
-          # JWT e crypto (para gateway auth tests)
-          pip install "PyJWT[crypto]==2.9.0" cryptography==43.0.3 || true
+            pytest-asyncio==0.24.0 \
+            "PyJWT[crypto]==2.9.0" \
+            cryptography==43.0.3 || true
 
       - name: Run unit tests with coverage
         run: |
@@ -68,7 +67,7 @@ jobs:
           path: coverage.xml
 
   # ---------------------------------------------------------------------------
-  # Lint e type checking
+  # Lint
   # ---------------------------------------------------------------------------
   lint:
     name: Lint (ruff)
@@ -109,16 +108,10 @@ jobs:
         run: pip install jsonschema==4.23.0
 
       - name: Validate alert.v1.json schema
-        run: python -c "
-          import json, jsonschema
-          schema = json.load(open('schemas/alert.v1.json'))
-          # Meta-validação: o schema em si é válido JSON Schema
-          jsonschema.Draft202012Validator.check_schema(schema)
-          print('schemas/alert.v1.json: OK')
-        "
+        run: python scripts/validate_schema.py
 
   # ---------------------------------------------------------------------------
-  # Verificação de segurança: sem portas de banco no compose
+  # Verificação de segurança: sem portas de banco e sem api.insecure
   # ---------------------------------------------------------------------------
   docker-security:
     name: Docker Security Check
@@ -128,30 +121,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pyyaml
+        run: pip install pyyaml==6.0.2
+
       - name: Check no DB ports exposed in base.yml
-        run: |
-          python3 - << 'EOF'
-          import yaml, sys
-
-          with open("docker/compose/base.yml") as f:
-              compose = yaml.safe_load(f)
-
-          DB_SERVICES = {"postgres", "pgbouncer", "neo4j", "opensearch", "redis", "chromadb"}
-          failures = []
-
-          for svc_name, svc in compose.get("services", {}).items():
-              if svc_name in DB_SERVICES:
-                  ports = svc.get("ports", [])
-                  if ports:
-                      failures.append(f"FALHA: {svc_name} tem ports expostas: {ports}")
-
-          if failures:
-              for f in failures:
-                  print(f, file=sys.stderr)
-              sys.exit(1)
-          else:
-              print("OK: nenhuma porta de banco exposta no host.")
-          EOF
+        run: python scripts/check_docker_security.py
 
       - name: Check no --api.insecure in traefik.yml
         run: |
@@ -161,36 +135,8 @@ jobs:
           fi
           echo "OK: traefik sem --api.insecure=true"
 
-      - name: Install PyYAML
-        run: pip install pyyaml==6.0.2
-
-      - name: Re-run with PyYAML
-        run: |
-          python3 - << 'EOF'
-          import yaml, sys
-
-          with open("docker/compose/base.yml") as f:
-              compose = yaml.safe_load(f)
-
-          DB_SERVICES = {"postgres", "pgbouncer", "neo4j", "opensearch", "redis", "chromadb"}
-          failures = []
-
-          for svc_name, svc in compose.get("services", {}).items():
-              if svc_name in DB_SERVICES:
-                  ports = svc.get("ports", [])
-                  if ports:
-                      failures.append(f"FALHA: {svc_name} tem ports expostas: {ports}")
-
-          if failures:
-              for f in failures:
-                  print(f, file=sys.stderr)
-              sys.exit(1)
-          else:
-              print("OK: nenhuma porta de banco exposta no host.")
-          EOF
-
   # ---------------------------------------------------------------------------
-  # Verificação de anti-patterns de API
+  # Verificação de anti-patterns de código
   # ---------------------------------------------------------------------------
   api-antipatterns:
     name: API Anti-patterns Check
@@ -202,15 +148,15 @@ jobs:
 
       - name: Check no raw SHA-256 truncation in lgpd.py
         run: |
-          if grep -n "hexdigest()\[:.*\]" services/shared/lgpd.py; then
+          if grep -n 'hexdigest()\[' services/shared/lgpd.py; then
             echo "FALHA: SHA-256 truncado encontrado em lgpd.py" >&2
             exit 1
           fi
           echo "OK: lgpd.py sem truncamento SHA-256"
 
-      - name: Check no entries[-N:] in merkle.py
+      - name: Check no entries window limit in merkle.py
         run: |
-          if grep -n "entries\[-" services/shared/ledger/merkle.py; then
+          if grep -n 'entries\[-' services/shared/ledger/merkle.py; then
             echo "FALHA: Merkle tree com janela limitada de entradas" >&2
             exit 1
           fi
