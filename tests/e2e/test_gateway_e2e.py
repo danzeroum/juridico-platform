@@ -310,6 +310,52 @@ class TestDanoBot:
 
 
 # ---------------------------------------------------------------------------
+# LicitaWatch
+# ---------------------------------------------------------------------------
+
+class TestLicitaWatch:
+    def test_contratos_cnpj_invalido_retorna_422(self, client, auth):
+        resp = client.get(
+            "/api/v1/licitawatch/contratos/123?referencia=2024",
+            headers=auth,
+        )
+        assert resp.status_code == 422
+        ct = resp.headers.get("content-type", "")
+        assert "json" in ct
+
+    def test_contratos_retorna_200_redis_offline(self, client, auth):
+        resp = client.get(
+            "/api/v1/licitawatch/contratos/12345678000195?referencia=2024",
+            headers=auth,
+        )
+        # Redis offline → lista vazia com graceful degradation
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "contratos" in body
+        assert "total" in body
+        assert body["cnpj_orgao"] == "12345678000195"
+
+    def test_evaluate_cnpj_invalido_retorna_422(self, client, auth):
+        resp = client.post(
+            "/api/v1/licitawatch/orgao/INVALIDO/evaluate?referencia=2024",
+            headers=auth,
+        )
+        assert resp.status_code == 422
+
+    def test_evaluate_retorna_200_sem_dados(self, client, auth):
+        resp = client.post(
+            "/api/v1/licitawatch/orgao/12345678000195/evaluate?referencia=2024",
+            headers=auth,
+        )
+        # Redis offline → zero contratos → zero alertas
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "alertas" in body
+        assert "envelopes" in body
+        assert body["contract_version"] == "licitawatch/v1"
+
+
+# ---------------------------------------------------------------------------
 # Erros globais — problem+json
 # ---------------------------------------------------------------------------
 
