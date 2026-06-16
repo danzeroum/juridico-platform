@@ -125,6 +125,23 @@ class TestBatchJobTracker:
         # Não deve lançar exceção
         update_batch_progress(redis, "batch_ghost", 0, [], "done")
 
+    def test_update_usa_batch_ttl_quando_remaining_negativo(self):
+        """Quando ttl retorna -1 (chave sem TTL), usa _BATCH_TTL como fallback."""
+        from services.scoring.idempotency import (
+            _BATCH_TTL,
+            create_batch_job,
+            update_batch_progress,
+        )
+        redis = _make_redis()
+        job_id = create_batch_job(redis, ["cnpj1"], "t1")
+        # Simula TTL expirado / não rastreado (remove da tabela interna do mock)
+        redis._store[f"batch:{job_id}"] = redis._store[f"batch:{job_id}"]  # mantém valor
+        redis.ttl.side_effect = lambda key: -1  # força retorno de -1
+        update_batch_progress(redis, job_id, processed=1, results=[], status="done")
+        # Verificar que setex foi chamado com _BATCH_TTL (não remaining)
+        last_call = redis.setex.call_args
+        assert last_call.args[1] == _BATCH_TTL
+
 
 class TestIdempotencyLedgerGate:
     """Garante que cache hit impede 2ª entrada no Decision Ledger (DoD P0-4)."""
