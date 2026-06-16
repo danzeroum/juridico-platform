@@ -10,8 +10,6 @@ Este router serve como TEMPLATE para todos os demais produtos:
 - Rate limiting por tenant (via RateLimitMiddleware)
 - JWT obrigatório (via JWTAuthMiddleware)
 - Score rotulado como heurística até validação formal (AUC/Brier)
-
-Integração com scoring engine (Fase 1b): TODO — delegar para get_score_engine().
 """
 from __future__ import annotations
 
@@ -21,6 +19,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from services.scoring.engine.factory import get_score_engine
+from services.scoring.features import assemble_features
+from services.shared.contracts.scoring import ScoreRequest as EngineScoreRequest
+from services.shared.ledger.merkle import DecisionLedger
+from services.shared.lgpd import hash_user_id
+
 # OTel — graceful degradation
 try:
     from opentelemetry import trace as otel_trace
@@ -29,6 +33,9 @@ try:
 except ImportError:
     _OTEL = False
     _tracer = None  # type: ignore[assignment]
+
+# In-memory ledger para Fase 1b. Fase 1c migra para Postgres com âncoras.
+_ledger = DecisionLedger()
 
 router = APIRouter(tags=["legalscore"])
 
@@ -154,15 +161,52 @@ async def score_company(
             span.set_attribute("cnpj.partial", body.cnpj[:6] + "****")
             span.set_attribute("idempotency.key_present", idempotency_key is not None)
 
-        # Verificar idempotência (Fase 1c: integrar com tabela tenant.idempotency_keys)
+        # Verificar idempotência
         if idempotency_key:
             cached = _check_idempotency(tenant_id, idempotency_key)
             if cached:
                 return ScoreResponse(**cached)
 
-        # TODO (Fase 1b): delegar para get_score_engine() com features do feature store
-        # Por ora, retorna 501 com mensagem informativa (não erro genérico)
-        result = _stub_score(body.cnpj, request_id)
+        # Montar feature vector a partir dos caches de ingestão
+        try:
+            from services.shared.redis_client import get_redis
+            redis = get_redis()
+            fv = assemble_features(body.cnpj, redis)
+        except Exception:
+            fv = None
+
+        # Scoring engine (SEAMS — PythonScoreEngine por padrão)
+        engine = get_score_engine()
+        if fv is not None:
+            eng_req = EngineScoreRequest(cnpj=body.cnpj, features=fv.features, cnae_2dig=fv.cnae_2dig)
+            eng_result = engine.score(eng_req)
+            result = ScoreResponse(
+                cnpj=body.cnpj,
+                score=eng_result.score,
+                risk_level=eng_result.risk_level,
+                confidence_interval=list(eng_result.confidence_interval),
+                breakdown=eng_result.breakdown,
+                request_id=request_id,
+                source_date=fv.source_date,
+                engine=eng_result.engine,
+                disclaimer=_SCORE_DISCLAIMER + (" [PARTIAL: " + ",".join(fv.sources_missing) + "]" if fv.is_partial else ""),
+            )
+        else:
+            result = _stub_score(body.cnpj, request_id)
+
+        # Decision Ledger — registra inputs_hash / outputs_hash (sem PII)
+        inputs_for_ledger = {"cnpj_partial": body.cnpj[:6] + "****", "features": (fv.features if fv else {})}
+        outputs_for_ledger = {"score": result.score, "risk_level": result.risk_level}
+        sources = fv.sources_used if fv else []
+        subject_token = hash_user_id(body.cnpj)  # CNPJ pseudonimizado (público)
+        _ledger.add_entry(
+            request_id=request_id,
+            product="legalscore",
+            inputs=inputs_for_ledger,
+            outputs=outputs_for_ledger,
+            sources=sources,
+            subject_token=subject_token,
+        )
 
         if idempotency_key:
             _store_idempotency(tenant_id, idempotency_key, result.model_dump())
@@ -196,7 +240,33 @@ async def score_company(
 )
 async def company_profile(cnpj: str, request: Request) -> Any:
     _get_tenant(request)
-    raise HTTPException(status_code=501, detail="Em implementação — Fase 1a (ingest Receita Federal)")
+    import json
+    try:
+        from services.shared.redis_client import get_redis
+        redis = get_redis()
+        raw = redis.get(f"receita:{cnpj}")
+    except Exception:
+        raw = None
+
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dados cadastrais não disponíveis para CNPJ {cnpj}. "
+                   "Execute a task de ingestão da Receita Federal primeiro.",
+        )
+    data = json.loads(raw)
+    from services.ingest.pipeline.quality import receita_bronze_to_silver
+    silver = receita_bronze_to_silver(data)
+    return {
+        "cnpj": cnpj,
+        "razao_social": data.get("razao_social"),
+        "situacao": silver.get("situacao_cadastral"),
+        "cnae_principal": silver.get("cnae_fiscal"),
+        "capital_social": silver.get("capital_social"),
+        "data_abertura": data.get("data_abertura"),
+        "source_date": silver.get("ingested_at", "")[:10] if silver.get("ingested_at") else None,
+        "esta_ativa": silver.get("esta_ativa"),
+    }
 
 
 @router.get(
@@ -262,7 +332,14 @@ async def batch_score(body: BatchScoreRequest, request: Request) -> Any:
 )
 async def audit_trail(request_id: str, request: Request) -> Any:
     _get_tenant(request)
-    raise HTTPException(status_code=501, detail="Em implementação — Fase 1c (Decision Ledger)")
+    try:
+        proof = _ledger.get_proof(request_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Entrada não encontrada no Decision Ledger: {request_id!r}",
+        ) from None
+    return proof
 
 
 # ---------------------------------------------------------------------------
