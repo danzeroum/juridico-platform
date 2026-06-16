@@ -1,0 +1,16 @@
+celery[redis]==5.4.0
+redis==5.0.4
+requests==2.31.0
+tenacity==8.3.0
+python-dateutil==2.9.0
+pydantic==2.7.1
+pydantic-settings==2.2.1
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.30
+neo4j==5.20.0
+opensearch-py==2.5.0
+minio==7.2.7
+pandas==2.2.2
+openpyxl==3.1.2
+loguru==0.7.2
+chromadb==0.5.0
