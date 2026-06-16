@@ -189,6 +189,15 @@ class TestPgfnDevedorBronze:
         with pytest.raises(ValidationError):
             PgfnDevedorBronze(cnpj="11222333000181", situacao="REGULAR", data_inscricao="nao-e-data")
 
+    def test_data_inscricao_valid_passthrough(self):
+        PgfnDevedorBronze = self._import()
+        rec = PgfnDevedorBronze(
+            cnpj="11222333000181",
+            situacao="REGULAR",
+            data_inscricao="2020-05-10",
+        )
+        assert rec.data_inscricao == "2020-05-10"
+
 
 # ── RECEITA ───────────────────────────────────────────────────────────────────
 
