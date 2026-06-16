@@ -21,6 +21,12 @@ from pydantic import BaseModel, Field
 
 from services.scoring.engine.factory import get_score_engine
 from services.scoring.features import assemble_features
+from services.scoring.idempotency import (
+    create_batch_job,
+    get_batch_status,
+    get_idempotency_result,
+    set_idempotency_result,
+)
 from services.shared.contracts.scoring import ScoreRequest as EngineScoreRequest
 from services.shared.ledger.merkle import DecisionLedger
 from services.shared.lgpd import hash_user_id
@@ -161,16 +167,24 @@ async def score_company(
             span.set_attribute("cnpj.partial", body.cnpj[:6] + "****")
             span.set_attribute("idempotency.key_present", idempotency_key is not None)
 
-        # Verificar idempotência
-        if idempotency_key:
-            cached = _check_idempotency(tenant_id, idempotency_key)
+        # Verificar idempotência (Redis, 24h TTL)
+        redis = None
+        try:
+            from services.shared.redis_client import get_redis
+            redis = get_redis()
+        except Exception:
+            pass
+
+        if idempotency_key and redis:
+            cached = get_idempotency_result(redis, tenant_id, idempotency_key)
             if cached:
                 return ScoreResponse(**cached)
 
         # Montar feature vector a partir dos caches de ingestão
         try:
-            from services.shared.redis_client import get_redis
-            redis = get_redis()
+            if redis is None:
+                from services.shared.redis_client import get_redis
+                redis = get_redis()
             fv = assemble_features(body.cnpj, redis)
         except Exception:
             fv = None
@@ -208,8 +222,8 @@ async def score_company(
             subject_token=subject_token,
         )
 
-        if idempotency_key:
-            _store_idempotency(tenant_id, idempotency_key, result.model_dump())
+        if idempotency_key and redis:
+            set_idempotency_result(redis, tenant_id, idempotency_key, result.model_dump())
 
         return result
 
@@ -296,17 +310,91 @@ async def risk_breakdown(cnpj: str, request: Request) -> Any:
 
 @router.post(
     "/batch",
+    status_code=status.HTTP_202_ACCEPTED,
     summary="Score em lote (até 1.000 CNPJs)",
+    description=(
+        "Enfileira scoring assíncrono para lista de CNPJs. "
+        "Retorna `job_id` para acompanhamento via `GET /batch/{job_id}`.\n\n"
+        "SLA: 1k CNPJs processados em < 30s quando cache Redis disponível."
+    ),
     responses={
-        202: {"description": "Batch enfileirado. Usar /audit/{job_id} para acompanhar."},
-        400: {"description": "Lista excede 1.000 CNPJs"},
+        202: {
+            "description": "Batch enfileirado com sucesso",
+            "content": {
+                "application/json": {
+                    "example": {"job_id": "batch_a1b2c3d4e5f6", "total": 50, "status": "queued"}
+                }
+            },
+        },
+        400: {"description": "Lista excede 1.000 CNPJs ou vazia"},
     },
 )
 async def batch_score(body: BatchScoreRequest, request: Request) -> Any:
-    _get_tenant(request)
+    tenant_id = _get_tenant(request)
+    if not body.cnpjs:
+        raise HTTPException(status_code=400, detail="Lista de CNPJs vazia.")
     if len(body.cnpjs) > 1000:
         raise HTTPException(status_code=400, detail="Máximo de 1.000 CNPJs por batch.")
-    raise HTTPException(status_code=501, detail="Em implementação — Fase 1c (Celery batch)")
+
+    try:
+        from services.shared.redis_client import get_redis
+        redis = get_redis()
+        job_id = create_batch_job(redis, body.cnpjs, tenant_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Redis indisponível: {exc}") from exc
+
+    # Enfileirar tarefa Celery (graceful degradation se Celery indisponível)
+    try:
+        from celery import current_app as celery_app
+        celery_app.send_task(
+            "scoring.tasks.run_batch_score",
+            args=[job_id, body.cnpjs],
+            queue="scoring",
+        )
+    except Exception as exc:
+        # Batch criado mas task não enfileirada — status ficará "queued" e expirará
+        # Em produção: dead-letter e alertas. Aqui: retornar com aviso.
+        return {"job_id": job_id, "total": len(body.cnpjs), "status": "queued", "warning": str(exc)}
+
+    return {"job_id": job_id, "total": len(body.cnpjs), "status": "queued"}
+
+
+@router.get(
+    "/batch/{job_id}",
+    summary="Status e resultado do batch de scoring",
+    responses={
+        200: {
+            "description": "Status do job (queued|processing|done|failed)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "job_id": "batch_a1b2c3d4e5f6",
+                        "status": "done",
+                        "total": 50,
+                        "processed": 50,
+                        "results": [{"cnpj": "11222333000181", "score": 720, "risk_level": "MODERADO"}],
+                    }
+                }
+            },
+        },
+        404: {"description": "Job não encontrado (expirado após 24h ou ID inválido)"},
+    },
+)
+async def batch_status(job_id: str, request: Request) -> Any:
+    _get_tenant(request)
+    try:
+        from services.shared.redis_client import get_redis
+        redis = get_redis()
+        result = get_batch_status(redis, job_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Redis indisponível: {exc}") from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id!r} não encontrado. Jobs expiram após 24h.",
+        )
+    return result
 
 
 @router.get(
@@ -345,17 +433,6 @@ async def audit_trail(request_id: str, request: Request) -> Any:
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
-_idempotency_store: dict[str, Any] = {}
-
-
-def _check_idempotency(tenant_id: str, key: str) -> dict | None:
-    return _idempotency_store.get(f"{tenant_id}:{key}")
-
-
-def _store_idempotency(tenant_id: str, key: str, value: dict) -> None:
-    _idempotency_store[f"{tenant_id}:{key}"] = value
-
-
 def _stub_score(cnpj: str, request_id: str) -> ScoreResponse:
     """Stub determinístico para o endpoint de referência. Fase 1b substituirá por score real."""
     digit_sum = sum(int(d) for d in cnpj)
