@@ -61,7 +61,47 @@ def _get_legalscore(cnpj: str | None) -> int | None:
     return None
 
 
-@router.post("/concilia/recommend")
+@router.post(
+    "/concilia/recommend",
+    summary="Recomenda faixa de acordo",
+    responses={
+        200: {
+            "description": "Recomendação de acordo com fatores e faixa de valor",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "tipo_acao": "TRABALHISTA",
+                        "valor_causa": 50000.0,
+                        "faixa_min": 15000.0,
+                        "faixa_max": 30000.0,
+                        "percentual_min": 0.30,
+                        "percentual_max": 0.60,
+                        "fatores": [
+                            {"nome": "probabilidade_favorable", "impacto": -0.05},
+                            {"nome": "risco_reu", "impacto": 0.05},
+                        ],
+                        "contract_version": "concilia/v1",
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Dados inválidos",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "https://juridico-platform/errors/validation-error",
+                        "title": "Erro de validação",
+                        "status": 422,
+                        "detail": "body → valor_causa: Input should be greater than 0",
+                        "instance": "/api/v1/concilia/recommend",
+                        "contract_version": "1.0",
+                    }
+                }
+            },
+        },
+    },
+)
 async def recommend(case: ConciliaRequest) -> JSONResponse:
     """
     Recomenda faixa de acordo baseada em prior histórico,
