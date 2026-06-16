@@ -1,0 +1,32 @@
+# =============================================================================
+# JURIDICO-PLATFORM - Docker Compose Principal
+# Inclui todos os serviços: infra base + monitoring + ingest + produtos
+# =============================================================================
+
+include:
+  - docker/compose/base.yml
+  - docker/compose/monitoring.yml
+  - docker/compose/ingest.yml
+  - docker/compose/ollama.yml
+  - docker/compose/traefik.yml
+
+networks:
+  juridico-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  pg_data:
+  neo4j_data:
+  neo4j_logs:
+  opensearch_data:
+  redis_data:
+  minio_data:
+  chromadb_data:
+  traefik_acme:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  ollama_data:

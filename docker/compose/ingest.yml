@@ -1,0 +1,62 @@
+# =============================================================================
+# INGEST - Celery Workers + Beat Scheduler
+# Pipeline de ingestão de dados públicos governamentais
+# =============================================================================
+
+services:
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: services/ingest/Dockerfile
+    container_name: celery-worker
+    restart: unless-stopped
+    command: celery -A ingest.celery_app worker --loglevel=info -Q daily,weekly,monthly,hourly,batch --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - OPENSEARCH_URL=http://opensearch:9200
+      - CHROMA_URL=http://chromadb:8000
+      - MINIO_URL=http://minio:9000
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+      - DATAJUD_API_URL=${DATAJUD_API_URL}
+      - DATAJUD_TOKEN=${DATAJUD_TOKEN}
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - juridico-net
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2"
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: services/ingest/Dockerfile
+    container_name: celery-beat
+    restart: unless-stopped
+    command: celery -A ingest.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      celery-worker:
+        condition: service_started
+    networks:
+      - juridico-net
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"

@@ -1,0 +1,41 @@
+# =============================================================================
+# OLLAMA - LLM local para classificação, NER, embeddings (custo zero)
+# Modelos: llama3:8b (classificação/NER) + bge-m3 (embeddings RAG)
+# =============================================================================
+
+services:
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - juridico-net
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: "2"
+
+  # Pull dos modelos na inicialização
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init
+    depends_on:
+      - ollama
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      ollama pull llama3:8b;
+      ollama pull bge-m3;
+      echo 'Modelos Ollama carregados';
+      exit 0;
+      "
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - juridico-net
