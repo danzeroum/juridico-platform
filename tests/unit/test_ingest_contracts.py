@@ -73,6 +73,16 @@ class TestDatajudProcessoBronze:
         )
         assert rec.cnpj_parte == "11222333000181"
 
+    def test_cnpj_parte_none_passthrough(self):
+        DatajudProcessoBronze = self._import()
+        rec = DatajudProcessoBronze(
+            id_processo="p1",
+            numero_processo="n",
+            data_julgamento="2024-01-01",
+            tribunal="TJSP",
+        )
+        assert rec.cnpj_parte is None
+
 
 class TestDatajudProcessoSilver:
     def _import(self):
@@ -104,6 +114,42 @@ class TestDatajudProcessoSilver:
             ingested_at=datetime.utcnow(),
         )
         assert rec.resultado_normalizado == "NEGADO"
+
+    def test_resultado_normalized_parcial(self):
+        DatajudProcessoSilver, datetime = self._import()
+        rec = DatajudProcessoSilver(
+            id_processo="p1",
+            numero_processo="n",
+            data_julgamento="2024-01-01",
+            tribunal="TJSP",
+            resultado_normalizado="resultado parcial favorável",
+            ingested_at=datetime.utcnow(),
+        )
+        assert rec.resultado_normalizado == "PARCIAL"
+
+    def test_resultado_normalized_outro(self):
+        DatajudProcessoSilver, datetime = self._import()
+        rec = DatajudProcessoSilver(
+            id_processo="p1",
+            numero_processo="n",
+            data_julgamento="2024-01-01",
+            tribunal="TJSP",
+            resultado_normalizado="extinto sem resolução do mérito",
+            ingested_at=datetime.utcnow(),
+        )
+        assert rec.resultado_normalizado == "OUTRO"
+
+    def test_resultado_normalized_none(self):
+        DatajudProcessoSilver, datetime = self._import()
+        rec = DatajudProcessoSilver(
+            id_processo="p1",
+            numero_processo="n",
+            data_julgamento="2024-01-01",
+            tribunal="TJSP",
+            resultado_normalizado=None,
+            ingested_at=datetime.utcnow(),
+        )
+        assert rec.resultado_normalizado is None
 
 
 # ── PGFN ──────────────────────────────────────────────────────────────────────
@@ -199,3 +245,24 @@ class TestReceitaCnpjBronze:
                 razao_social="",
                 situacao_cadastral="ATIVA",
             )
+
+    def test_invalid_cnpj_rejected(self):
+        ReceitaCnpjBronze = self._import()
+        with pytest.raises(ValidationError):
+            ReceitaCnpjBronze(
+                cnpj="12345",  # menos de 14 dígitos
+                razao_social="EMPRESA",
+                situacao_cadastral="ATIVA",
+            )
+
+    def test_data_abertura_valid(self):
+        ReceitaCnpjBronze = self._import()
+        rec = ReceitaCnpjBronze(
+            cnpj="11222333000181",
+            razao_social="EMPRESA TESTE LTDA",
+            situacao_cadastral="ATIVA",
+            data_abertura="2010-03-15",
+            data_situacao_cadastral="2024-01-01",
+        )
+        assert rec.data_abertura == "2010-03-15"
+        assert rec.data_situacao_cadastral == "2024-01-01"
