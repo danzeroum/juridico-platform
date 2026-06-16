@@ -398,6 +398,50 @@ async def batch_status(job_id: str, request: Request) -> Any:
 
 
 @router.get(
+    "/model-metrics",
+    summary="Métricas e status de validação do modelo LegalScore",
+    description=(
+        "Retorna AUC-ROC, Brier score e status de validação do modelo. "
+        "Score é **heurística** até validação formal com desfechos reais (Fase 1d)."
+    ),
+    responses={
+        200: {
+            "description": "Métricas do modelo (pode ser status 'pending' se sem validação)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "model_type": "heuristica",
+                        "validation_status": "pending",
+                        "auc": None,
+                        "brier_score": None,
+                        "target_auc": 0.70,
+                        "target_brier": 0.20,
+                        "validation_note": "Aguardando dataset de desfechos reais.",
+                    }
+                }
+            },
+        }
+    },
+)
+async def model_metrics(request: Request) -> Any:
+    _get_tenant(request)
+    from services.scoring.validation import get_current_metrics
+    metrics = get_current_metrics()
+    return {
+        "model_type": metrics.model_type,
+        "auc": metrics.auc,
+        "brier_score": metrics.brier_score,
+        "calibration_r2": metrics.calibration_r2,
+        "n_validation_samples": metrics.n_validation_samples,
+        "validation_status": metrics.validation_status,
+        "validation_note": metrics.validation_note,
+        "last_calibrated": metrics.last_calibrated,
+        "target_auc": metrics.target_auc,
+        "target_brier": metrics.target_brier,
+    }
+
+
+@router.get(
     "/audit/{request_id}",
     summary="Trilha auditável do Decision Ledger",
     responses={
