@@ -18,7 +18,44 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/petibot/assemble")
+@router.post(
+    "/petibot/assemble",
+    summary="Monta estrutura de petição jurídica",
+    responses={
+        200: {
+            "description": "Petição estruturada com seções padrão e precedentes",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "tipo_acao": "TRABALHISTA",
+                        "secoes": [
+                            {"titulo": "Dos Fatos", "conteudo": "...", "ordem": 1},
+                            {"titulo": "Do Direito", "conteudo": "...", "ordem": 2},
+                            {"titulo": "Do Pedido", "conteudo": "...", "ordem": 3},
+                        ],
+                        "precedentes_encontrados": 3,
+                        "contract_version": "petibot/v1",
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Dados de entrada inválidos",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "https://juridico-platform/errors/validation-error",
+                        "title": "Erro de validação",
+                        "status": 422,
+                        "detail": "body → tipo_acao: Input should be 'TRABALHISTA', 'CIVEL', ...",
+                        "instance": "/api/v1/petibot/assemble",
+                        "contract_version": "1.0",
+                    }
+                }
+            },
+        },
+    },
+)
 async def assemble(case: PetiRequest) -> JSONResponse:
     """
     Monta estrutura de petição com seções padrão e precedentes via RAG.

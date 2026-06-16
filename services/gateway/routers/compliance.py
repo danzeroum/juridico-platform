@@ -104,7 +104,52 @@ def _build_summary(cod_ibge: str, r) -> dict:
     }
 
 
-@router.get("/compliance/municipalities")
+@router.get(
+    "/compliance/municipalities",
+    summary="Lista municípios monitorados",
+    responses={
+        200: {
+            "description": "Lista paginada de municípios com indicadores",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "total": 1, "page": 1, "per_page": 20,
+                        "municipalities": [{
+                            "cod_ibge": "3550308", "referencia": "2026-06",
+                            "indicadores": {
+                                "delta_arrecadacao_yoy": -0.25,
+                                "delta_emprego_yoy": -0.12,
+                                "cobertura_agua_pct": 42.0,
+                                "cobertura_esgoto_pct": 21.0,
+                                "source_lag_days": 548,
+                                "source_date": "2024-10-01",
+                            },
+                            "sources_missing": [],
+                            "active_alerts": 2,
+                            "alert_rules_triggered": ["arrecadacao_critica", "saneamento_baixo"],
+                        }],
+                        "contract_version": "compliance/v1",
+                    }
+                }
+            },
+        },
+        503: {
+            "description": "Redis indisponível",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "https://juridico.io/errors/cache-indisponivel",
+                        "title": "Cache indisponível",
+                        "status": 503,
+                        "detail": "Redis inacessível — dados de compliance indisponíveis.",
+                        "instance": "/api/v1/compliance/municipalities",
+                        "contract_version": "compliance/v1",
+                    }
+                }
+            },
+        },
+    },
+)
 async def list_municipalities(
     uf: str | None = Query(None, description="Filtrar por UF (ex: SP)"),
     page: int = Query(1, ge=1),
@@ -148,7 +193,51 @@ async def list_municipalities(
         raise HTTPException(status_code=503, detail=_cache_error("/api/v1/compliance/municipalities")) from exc
 
 
-@router.get("/compliance/municipality/{ibge_code}")
+@router.get(
+    "/compliance/municipality/{ibge_code}",
+    summary="Indicadores detalhados de um município",
+    responses={
+        200: {
+            "description": "Indicadores e alertas do município",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "cod_ibge": "3550308", "referencia": "2026-06",
+                        "indicadores": {
+                            "delta_arrecadacao_yoy": -0.25,
+                            "delta_emprego_yoy": -0.12,
+                            "cobertura_agua_pct": 42.0,
+                            "cobertura_esgoto_pct": 21.0,
+                            "source_lag_days": 548,
+                            "source_date": "2024-10-01",
+                        },
+                        "sources_missing": [],
+                        "active_alerts": 2,
+                        "alert_rules_triggered": ["arrecadacao_critica", "saneamento_baixo"],
+                        "rules_available": ["arrecadacao_critica", "saneamento_baixo"],
+                        "lgpd_note": "DATASUS excluído desta versão — aguarda parecer DPO (PD-06).",
+                        "contract_version": "compliance/v1",
+                    }
+                }
+            },
+        },
+        400: {
+            "description": "Código IBGE inválido",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "https://juridico.io/errors/ibge-invalido",
+                        "title": "Código IBGE inválido",
+                        "status": 400,
+                        "detail": "cod_ibge deve conter exatamente 7 dígitos numéricos.",
+                        "instance": "/api/v1/compliance/municipality/INVALIDO",
+                        "contract_version": "compliance/v1",
+                    }
+                }
+            },
+        },
+    },
+)
 async def municipality_detail(ibge_code: str) -> JSONResponse:
     """Indicadores detalhados e alertas de um município."""
     if not ibge_code.isdigit() or len(ibge_code) != 7:

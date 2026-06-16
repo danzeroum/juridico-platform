@@ -103,7 +103,62 @@ def _rag_lookup(descricao: str, materia: str) -> list[JurisprudenciaHit]:
         return []
 
 
-@router.post("/taxpredict/predict")
+@router.post(
+    "/taxpredict/predict",
+    summary="Predição probabilística de desfecho tributário",
+    responses={
+        200: {
+            "description": "Predição calculada (ou prior nacional se modelo não carregado)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "materia": "ICMS",
+                        "probability": 0.42,
+                        "ci_lower": 0.28,
+                        "ci_upper": 0.58,
+                        "rag_hits": 3,
+                        "jurisprudencias": [],
+                        "features_used": {"valor_causa_log": 4.2, "anos_litigio": 3},
+                        "computed_at": "2026-06-16T18:00:00+00:00",
+                        "model_version": "bayesian_hierarquico_ICMS_v1",
+                        "is_fallback": False,
+                        "contract_version": "taxpredict/v1",
+                    }
+                }
+            },
+        },
+        422: {
+            "description": "Dados de entrada inválidos",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "https://juridico-platform/errors/validation-error",
+                        "title": "Erro de validação",
+                        "status": 422,
+                        "detail": "body → materia: Input should be 'ICMS', 'ISS', ...",
+                        "instance": "/api/v1/taxpredict/predict",
+                        "contract_version": "1.0",
+                    }
+                }
+            },
+        },
+        503: {
+            "description": "Falha na predição",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "https://juridico.io/errors/taxpredict/model-unavailable",
+                        "title": "Model Unavailable",
+                        "status": 503,
+                        "detail": "Falha na predição para matéria ICMS. Tente novamente.",
+                        "instance": "/api/v1/taxpredict/predict",
+                        "contract_version": "taxpredict/v1",
+                    }
+                }
+            },
+        },
+    },
+)
 async def predict(case: TaxPredictRequest, request: Request) -> JSONResponse:
     """
     Predição probabilística de desfecho tributário.
