@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-16 (sessão continuada — PRs #9–#14)
+> Atualizado em: 2026-06-16 (sessão continuada — PRs #9–#16)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -213,7 +213,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | 3a — ComplianceRadar | #6 | 91.9% / 261 testes | ✅ | ⚠️ P0-1, P0-4 |
 | 3b — TaxPredict | #7 | 91.98% / 271 testes | ✅ | ⚠️ P0-1, P0-4, P2-3 |
 | 4 — LicitaWatch/PetiBot/ConciliaIA | #8 | 93.16% / 351 testes | ✅ | ⚠️ P0-1, P0-4 |
-| E2E HTTP + PNCP task | #16 | 463 testes | ✅ | E2E Docker pendente (infra) |
+| E2E HTTP + PNCP task | #16 | 467 testes | ✅ | E2E Docker pendente (infra) |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
@@ -221,7 +221,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 
 1. **DanoBot** — 501 placeholder. Desbloqueia com parecer DPO (PD-06).
 2. **K8s migration** — condicional: p95 > 2s → Rust; >70% CPU sustentado → K8s. Nenhum gatilho atingido.
-3. **PNCP ingest task** (Celery) — ✅ implementado (PR #16): `run_daily_ingest(cnpj_orgao, ano)` com paginação, circuit breaker, reconciliação e cache Redis `pncp:{cnpj_orgao}:{ano}:{numero_controle}` TTL 24h. 19 testes unitários passando.
+3. **PNCP ingest task** (Celery) — ✅ implementado e merged (PR #16): `run_daily_ingest(cnpj_orgao, ano)` com paginação, circuit breaker, reconciliação e cache Redis `pncp:{cnpj_orgao}:{ano}:{numero_controle}` TTL 24h. 23 testes unitários passando. `requests` adicionado ao ambiente CI. Total geral: 467 testes (437 unit + 30 E2E), cobertura 93.45%.
 
 ---
 
