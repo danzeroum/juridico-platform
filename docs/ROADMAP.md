@@ -120,13 +120,17 @@ Requisitos adicionais:
   embutido em entradas cujo hash ancora a árvore Merkle — apagar quebraria a prova
   de integridade. **Solução obrigatória: crypto-shredding.** O pseudônimo de cada
   titular é cifrado com uma chave simétrica por titular (ex.: AES-256-GCM, chave
-  armazenada em KMS por `titular_id`). No Ledger, o campo `subject_ref` carrega o
-  pseudônimo cifrado, não o HMAC em claro. Apagamento = destruição da chave no KMS
-  (o campo no Ledger se torna criptograficamente irrelegível, mas o hash da entrada
-  permanece intacto → integridade da árvore preservada). A retenção de 7 anos aplica-se
-  ao ledger estrutural; os dados do titular tornam-se irreversivelmente não-religáveis
-  após o apagamento da chave. Esse design deve ser descrito no `docs/ROPA.md` e
-  validado por DPO/advogado antes do go-live da Fase 1.
+  armazenada em KMS por `titular_id`). No Ledger, o campo **`subject_token`** (nome
+  distinto de `subject_ref` do `AlertEnvelope`) carrega o pseudônimo cifrado. **Usar
+  um nome diferente é obrigatório:** `AlertEnvelope.subject_ref` contém exclusivamente
+  referências não-pessoais (código IBGE, CNPJ) — semântica oposta. Campos com o mesmo
+  nome e semânticas contrárias são convite a vazamento acidental de PII. Apagamento =
+  destruição da chave no KMS (`subject_token` se torna criptograficamente irrelegível,
+  mas o hash da entrada permanece intacto → integridade da árvore Merkle preservada).
+  A retenção de 7 anos aplica-se ao ledger estrutural; os dados do titular
+  tornam-se irreversivelmente não-religáveis após o apagamento da chave. Esse design
+  deve ser descrito no `docs/ROPA.md` e validado por DPO/advogado antes do go-live da
+  Fase 1.
 
 ---
 
@@ -221,13 +225,24 @@ desde o início; não reproduzir o que está no código atual.
   `/.well-known/jwks.json`.
 - **Autorização (RBAC):** roles `admin`, `analyst`, `viewer` por tenant. Implementado
   no gateway como middleware; propagado via claim JWT para os serviços downstream.
-- **Isolamento de tenant em Postgres:** Row-Level Security (RLS) com `current_setting('app.tenant_id')`
-  em todas as tabelas que contêm dados de cliente. O gateway injeta `SET LOCAL app.tenant_id = :id`
-  na conexão PgBouncer antes de qualquer query. Sem RLS ativo, a tabela não vai a produção.
+- **Isolamento de tenant em Postgres:** Row-Level Security (RLS) em todas as tabelas
+  que contêm dados de cliente. Policy usa `current_setting('app.tenant_id')` **sem
+  `missing_ok`** — se o GUC não estiver definido, a query falha com erro (fail-closed;
+  não vaza dados de tenant indefinido). Sem RLS ativo, a tabela não vai a produção.
+  **Armadilha crítica do PgBouncer em `pool_mode: transaction`:** nesse modo, a
+  conexão de servidor é reutilizada entre tenants entre transações. `SET app.tenant_id
+  = :id` (sem `LOCAL`) persiste na conexão de servidor e vaza para o próximo tenant
+  que reutilizar a mesma conexão. **Usar sempre `SET LOCAL app.tenant_id = :id`**
+  dentro da mesma transação que executa a query — o `LOCAL` garante que o GUC é
+  revertido no `COMMIT`/`ROLLBACK`. O middleware do gateway deve envolver cada request
+  num bloco `BEGIN … SET LOCAL … query … COMMIT`.
 - **Isolamento em Neo4j:** cada nó e aresta carrega propriedade `tenant_id`; queries
   sempre filtram por `tenant_id` (sem RLS nativo no Community — responsabilidade do ORM/query builder).
-- **Critério de aceite da Fase 0:** teste de isolamento: tenant A não consegue ler
-  dados do tenant B mesmo com JWT válido de A.
+- **Critério de aceite da Fase 0:** teste de isolamento que exercita **reuso de conexão
+  sob concorrência** (não apenas requests sequenciais): dois tenants em threads paralelas,
+  PgBouncer com `pool_mode: transaction`, confirmar que tenant A nunca lê dados de tenant
+  B mesmo quando as conexões são reutilizadas. Teste sequencial simples não é suficiente
+  — não detecta o vazamento via `SET` sem `LOCAL`.
 
 **Observabilidade (P1):**
 - Logging JSON estruturado com contexto `request_id`, `tenant`, `source` → Loki.
@@ -275,6 +290,14 @@ desde o início; não reproduzir o que está no código atual.
 - [ ] Endpoint de referência implementando todo o padrão P2 (versionamento, error contract, rate limit, OTel span, OpenAPI com exemplo).
 - [ ] **Multi-tenancy:** JWT RS256 validado no gateway; RBAC com roles `admin`/`analyst`/`viewer`; RLS ativo no Postgres; teste de isolamento: tenant A não lê dados de tenant B.
 - [ ] **Backup testado:** rotina automatizada de backup (PG `pg_dump` + Neo4j `neo4j-admin dump` + snapshot MinIO) com cópia offsite executada e **restore testado** em ambiente limpo. Sem restore testado, backup não conta como critério satisfeito — perder o ledger é perder a auditabilidade que é diferencial do produto.
+  > **Nota (não-bloqueante na Fase 0 — planejar para a Fase 3):** `pg_dump` é backup
+  > lógico e não escala para o ledger particionado com retenção de 7 anos: dumps
+  > completos ficam lentos, e recuperação ponto-no-tempo (PITR) não é possível. Na
+  > Fase 3, ao adicionar a réplica PG, migrar para backup físico contínuo:
+  > `pg_basebackup` + arquivamento de WAL (ex.: pgBackRest ou Barman para S3/MinIO).
+  > PITR permite restaurar para qualquer segundo dentro da janela de WAL retida —
+  > essencial para ledger de auditoria de 7 anos. Registrar a decisão de ferramenta
+  > no início da Fase 3.
 
 ---
 
@@ -345,7 +368,7 @@ Entregas:
 Critérios de aceite:
 - [ ] Endpoint de score retorna `disclaimer: "heurística — não validado contra desfechos reais"`.
 - [ ] Erro de validação retorna `problem+json` com `detail` informativo.
-- [ ] `Idempotency-Key` duplicada retorna 200 com resultado cacheado (não recalcula).
+- [ ] `Idempotency-Key` duplicada retorna 200 com resultado da requisição original (idempotência de retry, janela de 24h — não é cache de resultado).
 - [ ] Rate limit testado: 101ª req retorna 429 com `Retry-After`.
 - [ ] OTel span criado por request, visível no Jaeger/trace.
 
@@ -666,7 +689,7 @@ Critérios de aceite:
 ### 6.4 Definition of Done (TaxPredict)
 
 - [ ] Fases 3b-i–iii com critérios verdes; cobertura ≥ 80%.
-- [ ] MCMC nunca no path da request (testado com mock de trace ausente → carrega do MinIO).
+- [ ] MCMC nunca no path da request; trace carregado uma vez no startup do processo (testado: MinIO offline → serviço não sobe, não tenta carregar trace por request).
 - [ ] PyMC5 API exclusivamente; zero imports PyMC3/Theano.
 - [ ] `predict(case)` condiciona no caso (teste: dois casos diferentes → probabilidades diferentes).
 - [ ] SLA medido: p95 < 3s.
