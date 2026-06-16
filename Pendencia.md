@@ -119,7 +119,7 @@
 - DATASUS EXCLUÍDO — aguarda PD-06 (parecer DPO) ✅
 - Coverage: 91.9% (261 testes) ✅
 
-### Fase 3b 🔄 EM ANDAMENTO (TaxPredict — aguardando CI)
+### Fase 3b ✅ CONCLUÍDA (merged PR #7)
 - `services/shared/contracts/taxpredict.py`: Materia/Decisao enums, TaxPredictRequest, JurisprudenciaHit, TaxPredictResponse, extract_features() ✅
 - `services/taxpredict/model/bayesian.py`: PyMC5 com MutableData, fit() só em Celery, predict() condiciona no caso ✅
 - `services/taxpredict/tasks.py`: recalibrate_model Celery Beat (MCMC off-path) ✅
@@ -127,6 +127,20 @@
 - `services/gateway/routers/taxpredict.py`: POST /api/v1/taxpredict/predict com fallback prior nacional ✅
 - `services/shared/config.py`: MINIO_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, OLLAMA_URL ✅
 - Coverage: 91.98% (271 testes) ✅
+
+### Fase 4 🔄 EM ANDAMENTO (LicitaWatch, PetiBot, ConciliaIA, DanoBot placeholder)
+- `services/ingest/contracts/pncp.py`: Modalidade enum, PncpContratoBronze, PncpContratoSilver, pncp_bronze_to_silver() ✅
+- `services/shared/contracts/petibot.py`: TipoAcao, PetiRequest, PetiSection, PetiResponse, SECOES_MINIMAS_POR_TIPO ✅
+- `services/shared/contracts/concilia.py`: ConciliaRequest, ConciliaFator, ConciliaResponse ✅
+- `services/licitawatch/monitor.py`: LicitacaoIndicadores, build_indicadores_from_silver, evaluate_licitacoes (LL01–LL04) ✅
+- `services/petibot/assembler.py`: assemble_petition com RAG graceful degradation ✅
+- `services/concilia/recommender.py`: recommend_settlement com prior por tipo + ajuste probability/risk ✅
+- `services/gateway/routers/licitawatch.py`: GET /contratos/{cnpj} + POST /orgao/{cnpj}/evaluate ✅
+- `services/gateway/routers/petibot.py`: POST /petibot/assemble ✅
+- `services/gateway/routers/danobot.py`: POST /danobot/predict → 501 (PD-06 bloqueado) ✅
+- `services/gateway/routers/concilia.py`: POST /concilia/recommend ✅
+- `services/gateway/main.py`: todos os routers registrados ✅
+- 80 novos testes (160 total Fase 4); coverage: 93.16% (351 testes) ✅
 
 ---
 
@@ -147,7 +161,6 @@
 **Impacto:** ComplianceRadar (CC03-SNIS ok; DATASUS excluído) e DanoBot (Fase 4) não podem usar dados de saúde  
 **Ação:** Contratar DPO antes da Fase 3b (ou 4 se DanoBot for prioritário)
 
-### QT-06 — PyMC3 → PyMC5 para TaxPredict
-**Status:** Pendente (Fase 3b)  
-**Contexto:** `services/taxpredict/model/bayesian.py` usa API PyMC3 obsoleta; `predict()` ignora input; MCMC no path da request  
-**Ação:** Migrar para PyMC5 com `pm.set_data`/`MutableData`; MCMC em Celery Beat
+### QT-06 — PyMC3 → PyMC5 para TaxPredict ✅ CONCLUÍDO (Fase 3b)
+**Status:** Migrado para PyMC5 com `pm.MutableData`, `pm.set_data()`, MCMC apenas em Celery Beat  
+**Contexto:** `services/taxpredict/model/bayesian.py` migrado; `predict()` condiciona no input via `set_data`; `recalibrate_model` Celery task
