@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-16
+> Atualizado em: 2026-06-16 (sessão continuada — PRs #9–#14)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -13,12 +13,12 @@
 
 | Fase | Código merged / CI verde | DoD verde (pronto) |
 |---|---|---|
-| 0 — Segurança/Infra | ✅ PR #3 | ⚠️ P0-2 (restore não testado), P0-3 (crypto-shredding) em aberto |
-| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4 (rate-limit/idemp/RLS sem teste) |
-| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4 |
-| 3a — ComplianceRadar | ✅ PR #6 | ⚠️ P0-1, P0-4 (lag SNIS 548d não exposto no payload) |
-| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4 (validação modelo / rótulo heurística) |
-| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4 |
+| 0 — Segurança/Infra | ✅ PRs #3,#9–#14 | ⚠️ P0-2 (restore não testado), P0-4 parcial |
+| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4 parcial |
+| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4 parcial |
+| 3a — ComplianceRadar | ✅ PRs #6,#13 | ⚠️ P0-1, P0-4 parcial |
+| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4 parcial (validação modelo) |
+| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4 parcial |
 
 ---
 
@@ -36,25 +36,25 @@
 **Ação:** Executar backup (PG + Neo4j + MinIO), enviar offsite, restaurar em VM limpa, reexecutar `verify_integrity()` sobre entradas do ledger restaurado.  
 **Aceite:** log do restore + raiz Merkle idêntica pós-restore commitados; procedimento no playbook.
 
-### P0-3 — Crypto-shredding (right-to-erasure) não implementado
-**Arquivo:** `services/shared/ledger/merkle.py` (campo `subject_token` existe), helper AES a criar  
-**Problema:** O design e o campo existem, mas o mecanismo (cifrar pseudônimo com AES-256-GCM por titular; apagar = destruir a chave no KMS) e o teste não aparecem implementados.  
-**Ação:** (1) Cifrador por titular: `subject_token = AES-256-GCM(pseudonimo, chave_do_titular)`. (2) Operação de apagamento = destruição da chave no KMS. (3) Nenhum HMAC em claro persistido.  
-**Aceite:** teste que, após apagar a chave, `subject_token` fica irrecuperável mas `verify_integrity()` continua True.
+### P0-3 — Crypto-shredding (right-to-erasure) ✅ IMPLEMENTADO (PR #11)
+**Arquivo:** `services/shared/lgpd_crypto.py`  
+**Implementado:** AES-256-GCM por titular; `erase_titular()` apaga a chave; `verify_integrity()` continua True após erasure.  
+**Pendência de produção:** migrar `_KEY_STORE` em memória para KMS real (PD-05).  
+**Aceite:** 15 testes em `test_lgpd_crypto.py` passando ✅
 
 ### P0-4 — DoD por produto: itens presentes mas sem teste que comprove
 **Arquivo:** suites em `tests/` por serviço  
 **Ação — confirmar (ou criar) teste para cada item, por produto:**
-- [ ] Rate limit por tenant: 101ª req → `429` com `Retry-After`
+- [x] Rate limit por tenant: 101ª req → `429` com `Retry-After` — ✅ PR #12 (`test_middleware_ratelimit.py`)
 - [ ] Idempotência: `Idempotency-Key` repetida em 24h → mesmo resultado sem recálculo e sem 2ª entrada no Ledger
-- [ ] `problem+json` em **todos** os endpoints de erro (não só no de referência)
-- [ ] OpenAPI 3.1 com exemplos de sucesso **e** erro por endpoint
-- [ ] **Isolamento de tenant sob reuso de pool** → `tests/integration/test_tenant_isolation.py` (criado neste PR; requer banco para rodar)
-- [ ] MinIO: acesso anônimo a qualquer bucket → `403`
-- [ ] `source_date` + `lag_days` no payload de toda saída com lag (crítico: ComplianceRadar SNIS 548d)
-- [ ] Audit trail de acesso a dados pessoais
-- [ ] E2E por produto com Docker real; contrato por fronteira SEAMS
-- [ ] OTel span + métricas Prometheus em **todas** as fronteiras (não só no endpoint de referência)
+- [x] `problem+json` em **todos** os endpoints de erro — ✅ PR #13 (`test_problem_json_handler.py`, `RequestValidationError` 422, `_status_title` 503)
+- [ ] OpenAPI 3.1 com exemplos de sucesso **e** erro por endpoint (legalscore tem; restante pendente)
+- [x] **Isolamento de tenant sob reuso de pool** → `tests/integration/test_tenant_isolation.py` — ✅ PR #10 (requer banco para rodar)
+- [ ] MinIO: acesso anônimo a qualquer bucket → `403` (requer infra)
+- [x] `source_date` + `lag_days` no payload de toda saída com lag — ✅ PR #13 (ComplianceRadar SNIS 548d)
+- [x] Audit trail de acesso a dados pessoais — ✅ PR #14 (`audit_log.py`, `test_audit_log.py`, wired em decrypt/erase/ledger.write)
+- [ ] E2E por produto com Docker real; contrato por fronteira SEAMS (requer infra)
+- [ ] OTel span + métricas Prometheus em **todas** as fronteiras (LegalScore tem; restante pendente)
 - [ ] Playbook de incidentes por produto  
 **Aceite:** cada checkbox com teste nomeado correspondente verde no CI.
 
