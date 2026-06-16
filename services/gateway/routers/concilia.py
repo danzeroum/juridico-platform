@@ -18,6 +18,15 @@ from services.shared.contracts.concilia import ConciliaRequest
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# OTel — graceful degradation
+try:
+    from opentelemetry import trace as otel_trace
+    _tracer = otel_trace.get_tracer("concilia")
+    _OTEL = True
+except ImportError:
+    _OTEL = False
+    _tracer = None  # type: ignore[assignment]
+
 
 def _get_taxpredict(descricao: str, materia: str) -> float | None:
     """Probabilidade TaxPredict (degradação graciosa se offline)."""
@@ -110,12 +119,24 @@ async def recommend(case: ConciliaRequest) -> JSONResponse:
     Todos os enriquecimentos são opcionais: degradação graciosa se offline.
     """
     tipo = case.tipo_acao.value
-    probability_favorable = _get_taxpredict(case.descricao, tipo)
-    risk_score_reu = _get_legalscore(case.cnpj_reu)
 
-    response = recommend_settlement(
-        request=case,
-        probability_favorable=probability_favorable,
-        risk_score_reu=risk_score_reu,
-    )
-    return JSONResponse(content=response.model_dump(), status_code=200)
+    ctx_manager = _tracer.start_as_current_span("concilia.recommend") if _OTEL else _noop_span()
+    with ctx_manager as span:
+        if _OTEL and span:
+            span.set_attribute("tipo_acao", tipo)
+            span.set_attribute("valor_causa", float(case.valor_causa))
+
+        probability_favorable = _get_taxpredict(case.descricao, tipo)
+        risk_score_reu = _get_legalscore(case.cnpj_reu)
+
+        response = recommend_settlement(
+            request=case,
+            probability_favorable=probability_favorable,
+            risk_score_reu=risk_score_reu,
+        )
+        return JSONResponse(content=response.model_dump(), status_code=200)
+
+
+class _noop_span:
+    def __enter__(self): return None
+    def __exit__(self, *_): pass

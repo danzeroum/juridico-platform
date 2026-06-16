@@ -32,6 +32,15 @@ from services.shared.contracts.taxpredict import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# OTel — graceful degradation
+try:
+    from opentelemetry import trace as otel_trace
+    _tracer = otel_trace.get_tracer("taxpredict")
+    _OTEL = True
+except ImportError:
+    _OTEL = False
+    _tracer = None  # type: ignore[assignment]
+
 # Trace carregado uma vez no startup (lazy on first request); thread-safe reads.
 _MODEL_CACHE: dict[str, Any] = {}
 _RAG_N_RESULTS = 5
@@ -173,47 +182,58 @@ async def predict(case: TaxPredictRequest, request: Request) -> JSONResponse:
     materia = case.materia.value
     features = extract_features(case)
 
-    jurisprudencias = _rag_lookup(case.descricao, materia)
+    ctx_manager = _tracer.start_as_current_span("taxpredict.predict") if _OTEL else _noop_span()
+    with ctx_manager as span:
+        if _OTEL and span:
+            span.set_attribute("materia", materia)
+            span.set_attribute("descricao.len", len(case.descricao))
 
-    model = _get_model(materia)
-    is_fallback = model is None or not getattr(model, "is_ready", False)
+        jurisprudencias = _rag_lookup(case.descricao, materia)
 
-    if is_fallback:
-        prob = PRIOR_NACIONAL
-        ci_lower = PRIOR_CI_LOWER
-        ci_upper = PRIOR_CI_UPPER
-        model_version = "prior_nacional_v1"
-    else:
-        try:
-            result = model.predict(features)
-            prob = result["probability"]
-            ci_lower = result["ci_lower"]
-            ci_upper = result["ci_upper"]
-            model_version = f"bayesian_hierarquico_{materia}_v1"
-        except Exception as exc:
-            logger.error("Predição falhou matéria=%s: %s", materia, exc)
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "type": "https://juridico.io/errors/taxpredict/model-unavailable",
-                    "title": "Model Unavailable",
-                    "status": 503,
-                    "detail": f"Falha na predição para matéria {materia}. Tente novamente.",
-                    "instance": str(request.url),
-                    "contract_version": TAXPREDICT_CONTRACT_VERSION,
-                },
-            ) from exc
+        model = _get_model(materia)
+        is_fallback = model is None or not getattr(model, "is_ready", False)
 
-    response = TaxPredictResponse(
-        materia=materia,
-        probability=round(prob, 4),
-        ci_lower=round(ci_lower, 4),
-        ci_upper=round(ci_upper, 4),
-        rag_hits=len(jurisprudencias),
-        jurisprudencias=jurisprudencias,
-        features_used=features,
-        computed_at=datetime.now(UTC).isoformat(),
-        model_version=model_version,
-        is_fallback=is_fallback,
-    )
-    return JSONResponse(content=response.model_dump(), status_code=200)
+        if is_fallback:
+            prob = PRIOR_NACIONAL
+            ci_lower = PRIOR_CI_LOWER
+            ci_upper = PRIOR_CI_UPPER
+            model_version = "prior_nacional_v1"
+        else:
+            try:
+                result = model.predict(features)
+                prob = result["probability"]
+                ci_lower = result["ci_lower"]
+                ci_upper = result["ci_upper"]
+                model_version = f"bayesian_hierarquico_{materia}_v1"
+            except Exception as exc:
+                logger.error("Predição falhou matéria=%s: %s", materia, exc)
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "type": "https://juridico.io/errors/taxpredict/model-unavailable",
+                        "title": "Model Unavailable",
+                        "status": 503,
+                        "detail": f"Falha na predição para matéria {materia}. Tente novamente.",
+                        "instance": str(request.url),
+                        "contract_version": TAXPREDICT_CONTRACT_VERSION,
+                    },
+                ) from exc
+
+        response = TaxPredictResponse(
+            materia=materia,
+            probability=round(prob, 4),
+            ci_lower=round(ci_lower, 4),
+            ci_upper=round(ci_upper, 4),
+            rag_hits=len(jurisprudencias),
+            jurisprudencias=jurisprudencias,
+            features_used=features,
+            computed_at=datetime.now(UTC).isoformat(),
+            model_version=model_version,
+            is_fallback=is_fallback,
+        )
+        return JSONResponse(content=response.model_dump(), status_code=200)
+
+
+class _noop_span:
+    def __enter__(self): return None
+    def __exit__(self, *_): pass

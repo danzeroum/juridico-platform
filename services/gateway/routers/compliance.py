@@ -23,6 +23,15 @@ from services.compliance.rules import ALERT_RULES
 
 router = APIRouter()
 
+# OTel — graceful degradation
+try:
+    from opentelemetry import trace as otel_trace
+    _tracer = otel_trace.get_tracer("compliance")
+    _OTEL = True
+except ImportError:
+    _OTEL = False
+    _tracer = None  # type: ignore[assignment]
+
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
@@ -245,17 +254,21 @@ async def municipality_detail(ibge_code: str) -> JSONResponse:
             status_code=400,
             detail=_ibge_error(ibge_code, f"/api/v1/compliance/municipality/{ibge_code}"),
         )
-    try:
-        r = _get_redis()
-        summary = _build_summary(ibge_code, r)
-        summary["rules_available"] = [rule["id"] for rule in ALERT_RULES]
-        summary["lgpd_note"] = "DATASUS excluído desta versão — aguarda parecer DPO (PD-06)."
-        return JSONResponse(content=summary)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=_cache_error(f"/api/v1/compliance/municipality/{ibge_code}"),
-        ) from exc
+    ctx_manager = _tracer.start_as_current_span("compliance.municipality_detail") if _OTEL else _noop_span()
+    with ctx_manager as span:
+        if _OTEL and span:
+            span.set_attribute("ibge_code", ibge_code)
+        try:
+            r = _get_redis()
+            summary = _build_summary(ibge_code, r)
+            summary["rules_available"] = [rule["id"] for rule in ALERT_RULES]
+            summary["lgpd_note"] = "DATASUS excluído desta versão — aguarda parecer DPO (PD-06)."
+            return JSONResponse(content=summary)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=_cache_error(f"/api/v1/compliance/municipality/{ibge_code}"),
+            ) from exc
 
 
 @router.get("/compliance/alerts")
@@ -348,3 +361,8 @@ async def evaluate_municipality(ibge_code: str) -> JSONResponse:
                 "contract_version": "compliance/v1",
             },
         ) from exc
+
+
+class _noop_span:
+    def __enter__(self): return None
+    def __exit__(self, *_): pass
