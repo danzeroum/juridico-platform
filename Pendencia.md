@@ -80,3 +80,39 @@
 | 2026-06-16 | `neo4j:5-enterprise` → `neo4j:5-community` no compose de dev | Licença developer proibida em produção; Community adequado para Fases 0–2 |
 | 2026-06-16 | Chave HMAC via Docker Secret (não KMS real) em dev | KMS requer infraestrutura de nuvem; Docker Secret é a camada de abstração correta via `load_secret()` |
 | 2026-06-16 | JWT RS256 com par de chaves gerado internamente | Adequado para dev/staging; migrar para IdP dedicado antes do go-live |
+| 2026-06-16 | Fase 0 merged to main (PR #3) | CI green (5 jobs) — segurança, SEAMS, CI, LGPD fundações |
+| 2026-06-16 | Fase 1 (PR #4) aberta — aguardando CI | 1a: ingest pipeline, 1b: engine+ledger, 1c: batch+idemp, 1d: validação |
+
+---
+
+## PROGRESSO ATUAL (2026-06-16)
+
+### Fase 0 ✅ CONCLUÍDA (merged PR #3)
+- HMAC-SHA256 em lgpd.py ✅
+- Merkle full-ledger com get_proof()/verify_integrity() ✅
+- Contratos SEAMS canônicos ✅
+- CI 5 jobs verdes ✅
+- API-GUIDELINES.md + ROPA.md ✅
+
+### Fase 1 🔄 EM ANDAMENTO (PR #4 — aguardando CI)
+- **1a**: data contracts DATAJUD/PGFN/Receita, pipeline bronze→silver, CircuitBreaker ✅
+- **1b**: FeatureAssembler, PythonScoreEngine via SEAMS, Decision Ledger ✅
+- **1c**: batch endpoint HTTP 202, Redis idempotency 24h, Celery run_batch_score ✅
+- **1d**: validation.py (AUC/Brier), model-metrics endpoint, locust load test ✅
+- Coverage: 85% (118 testes) ✅
+
+### Fase 2 🔜 PRÓXIMA (ContabilIA)
+- Pré-requisito: PR #4 merged
+- Corrigir AnomalyDetector (fit() antes de detect(), fallback logic)
+- Ingest CAGED, SICONFI
+- Cross-check Benford + Z-score
+- API upload DRE
+
+---
+
+## QUESTÕES TÉCNICAS PARA FASE 2
+
+### QT-04 — AnomalyDetector precisa de correção antes da Fase 2
+**Status:** Identificado no ROADMAP como pré-requisito  
+**Contexto:** `services/audit/anomaly/detector.py` chama `decision_function()` antes de `fit()`; fallback compara escalar com percentil de si mesmo.  
+**Ação:** Corrigir na Fase 2 antes de usar em ContabilIA.

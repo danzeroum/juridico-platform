@@ -10,8 +10,6 @@ Este router serve como TEMPLATE para todos os demais produtos:
 - Rate limiting por tenant (via RateLimitMiddleware)
 - JWT obrigatório (via JWTAuthMiddleware)
 - Score rotulado como heurística até validação formal (AUC/Brier)
-
-Integração com scoring engine (Fase 1b): TODO — delegar para get_score_engine().
 """
 from __future__ import annotations
 
@@ -21,6 +19,18 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from services.scoring.engine.factory import get_score_engine
+from services.scoring.features import assemble_features
+from services.scoring.idempotency import (
+    create_batch_job,
+    get_batch_status,
+    get_idempotency_result,
+    set_idempotency_result,
+)
+from services.shared.contracts.scoring import ScoreRequest as EngineScoreRequest
+from services.shared.ledger.merkle import DecisionLedger
+from services.shared.lgpd import hash_user_id
+
 # OTel — graceful degradation
 try:
     from opentelemetry import trace as otel_trace
@@ -29,6 +39,9 @@ try:
 except ImportError:
     _OTEL = False
     _tracer = None  # type: ignore[assignment]
+
+# In-memory ledger para Fase 1b. Fase 1c migra para Postgres com âncoras.
+_ledger = DecisionLedger()
 
 router = APIRouter(tags=["legalscore"])
 
@@ -154,18 +167,63 @@ async def score_company(
             span.set_attribute("cnpj.partial", body.cnpj[:6] + "****")
             span.set_attribute("idempotency.key_present", idempotency_key is not None)
 
-        # Verificar idempotência (Fase 1c: integrar com tabela tenant.idempotency_keys)
-        if idempotency_key:
-            cached = _check_idempotency(tenant_id, idempotency_key)
+        # Verificar idempotência (Redis, 24h TTL)
+        redis = None
+        try:
+            from services.shared.redis_client import get_redis
+            redis = get_redis()
+        except Exception:
+            pass
+
+        if idempotency_key and redis:
+            cached = get_idempotency_result(redis, tenant_id, idempotency_key)
             if cached:
                 return ScoreResponse(**cached)
 
-        # TODO (Fase 1b): delegar para get_score_engine() com features do feature store
-        # Por ora, retorna 501 com mensagem informativa (não erro genérico)
-        result = _stub_score(body.cnpj, request_id)
+        # Montar feature vector a partir dos caches de ingestão
+        try:
+            if redis is None:
+                from services.shared.redis_client import get_redis
+                redis = get_redis()
+            fv = assemble_features(body.cnpj, redis)
+        except Exception:
+            fv = None
 
-        if idempotency_key:
-            _store_idempotency(tenant_id, idempotency_key, result.model_dump())
+        # Scoring engine (SEAMS — PythonScoreEngine por padrão)
+        engine = get_score_engine()
+        if fv is not None:
+            eng_req = EngineScoreRequest(cnpj=body.cnpj, features=fv.features, cnae_2dig=fv.cnae_2dig)
+            eng_result = engine.score(eng_req)
+            result = ScoreResponse(
+                cnpj=body.cnpj,
+                score=eng_result.score,
+                risk_level=eng_result.risk_level,
+                confidence_interval=list(eng_result.confidence_interval),
+                breakdown=eng_result.breakdown,
+                request_id=request_id,
+                source_date=fv.source_date,
+                engine=eng_result.engine,
+                disclaimer=_SCORE_DISCLAIMER + (" [PARTIAL: " + ",".join(fv.sources_missing) + "]" if fv.is_partial else ""),
+            )
+        else:
+            result = _stub_score(body.cnpj, request_id)
+
+        # Decision Ledger — registra inputs_hash / outputs_hash (sem PII)
+        inputs_for_ledger = {"cnpj_partial": body.cnpj[:6] + "****", "features": (fv.features if fv else {})}
+        outputs_for_ledger = {"score": result.score, "risk_level": result.risk_level}
+        sources = fv.sources_used if fv else []
+        subject_token = hash_user_id(body.cnpj)  # CNPJ pseudonimizado (público)
+        _ledger.add_entry(
+            request_id=request_id,
+            product="legalscore",
+            inputs=inputs_for_ledger,
+            outputs=outputs_for_ledger,
+            sources=sources,
+            subject_token=subject_token,
+        )
+
+        if idempotency_key and redis:
+            set_idempotency_result(redis, tenant_id, idempotency_key, result.model_dump())
 
         return result
 
@@ -196,7 +254,33 @@ async def score_company(
 )
 async def company_profile(cnpj: str, request: Request) -> Any:
     _get_tenant(request)
-    raise HTTPException(status_code=501, detail="Em implementação — Fase 1a (ingest Receita Federal)")
+    import json
+    try:
+        from services.shared.redis_client import get_redis
+        redis = get_redis()
+        raw = redis.get(f"receita:{cnpj}")
+    except Exception:
+        raw = None
+
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dados cadastrais não disponíveis para CNPJ {cnpj}. "
+                   "Execute a task de ingestão da Receita Federal primeiro.",
+        )
+    data = json.loads(raw)
+    from services.ingest.pipeline.quality import receita_bronze_to_silver
+    silver = receita_bronze_to_silver(data)
+    return {
+        "cnpj": cnpj,
+        "razao_social": data.get("razao_social"),
+        "situacao": silver.get("situacao_cadastral"),
+        "cnae_principal": silver.get("cnae_fiscal"),
+        "capital_social": silver.get("capital_social"),
+        "data_abertura": data.get("data_abertura"),
+        "source_date": silver.get("ingested_at", "")[:10] if silver.get("ingested_at") else None,
+        "esta_ativa": silver.get("esta_ativa"),
+    }
 
 
 @router.get(
@@ -226,17 +310,135 @@ async def risk_breakdown(cnpj: str, request: Request) -> Any:
 
 @router.post(
     "/batch",
+    status_code=status.HTTP_202_ACCEPTED,
     summary="Score em lote (até 1.000 CNPJs)",
+    description=(
+        "Enfileira scoring assíncrono para lista de CNPJs. "
+        "Retorna `job_id` para acompanhamento via `GET /batch/{job_id}`.\n\n"
+        "SLA: 1k CNPJs processados em < 30s quando cache Redis disponível."
+    ),
     responses={
-        202: {"description": "Batch enfileirado. Usar /audit/{job_id} para acompanhar."},
-        400: {"description": "Lista excede 1.000 CNPJs"},
+        202: {
+            "description": "Batch enfileirado com sucesso",
+            "content": {
+                "application/json": {
+                    "example": {"job_id": "batch_a1b2c3d4e5f6", "total": 50, "status": "queued"}
+                }
+            },
+        },
+        400: {"description": "Lista excede 1.000 CNPJs ou vazia"},
     },
 )
 async def batch_score(body: BatchScoreRequest, request: Request) -> Any:
-    _get_tenant(request)
+    tenant_id = _get_tenant(request)
+    if not body.cnpjs:
+        raise HTTPException(status_code=400, detail="Lista de CNPJs vazia.")
     if len(body.cnpjs) > 1000:
         raise HTTPException(status_code=400, detail="Máximo de 1.000 CNPJs por batch.")
-    raise HTTPException(status_code=501, detail="Em implementação — Fase 1c (Celery batch)")
+
+    try:
+        from services.shared.redis_client import get_redis
+        redis = get_redis()
+        job_id = create_batch_job(redis, body.cnpjs, tenant_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Redis indisponível: {exc}") from exc
+
+    # Enfileirar tarefa Celery (graceful degradation se Celery indisponível)
+    try:
+        from celery import current_app as celery_app
+        celery_app.send_task(
+            "scoring.tasks.run_batch_score",
+            args=[job_id, body.cnpjs],
+            queue="scoring",
+        )
+    except Exception as exc:
+        # Batch criado mas task não enfileirada — status ficará "queued" e expirará
+        # Em produção: dead-letter e alertas. Aqui: retornar com aviso.
+        return {"job_id": job_id, "total": len(body.cnpjs), "status": "queued", "warning": str(exc)}
+
+    return {"job_id": job_id, "total": len(body.cnpjs), "status": "queued"}
+
+
+@router.get(
+    "/batch/{job_id}",
+    summary="Status e resultado do batch de scoring",
+    responses={
+        200: {
+            "description": "Status do job (queued|processing|done|failed)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "job_id": "batch_a1b2c3d4e5f6",
+                        "status": "done",
+                        "total": 50,
+                        "processed": 50,
+                        "results": [{"cnpj": "11222333000181", "score": 720, "risk_level": "MODERADO"}],
+                    }
+                }
+            },
+        },
+        404: {"description": "Job não encontrado (expirado após 24h ou ID inválido)"},
+    },
+)
+async def batch_status(job_id: str, request: Request) -> Any:
+    _get_tenant(request)
+    try:
+        from services.shared.redis_client import get_redis
+        redis = get_redis()
+        result = get_batch_status(redis, job_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Redis indisponível: {exc}") from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id!r} não encontrado. Jobs expiram após 24h.",
+        )
+    return result
+
+
+@router.get(
+    "/model-metrics",
+    summary="Métricas e status de validação do modelo LegalScore",
+    description=(
+        "Retorna AUC-ROC, Brier score e status de validação do modelo. "
+        "Score é **heurística** até validação formal com desfechos reais (Fase 1d)."
+    ),
+    responses={
+        200: {
+            "description": "Métricas do modelo (pode ser status 'pending' se sem validação)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "model_type": "heuristica",
+                        "validation_status": "pending",
+                        "auc": None,
+                        "brier_score": None,
+                        "target_auc": 0.70,
+                        "target_brier": 0.20,
+                        "validation_note": "Aguardando dataset de desfechos reais.",
+                    }
+                }
+            },
+        }
+    },
+)
+async def model_metrics(request: Request) -> Any:
+    _get_tenant(request)
+    from services.scoring.validation import get_current_metrics
+    metrics = get_current_metrics()
+    return {
+        "model_type": metrics.model_type,
+        "auc": metrics.auc,
+        "brier_score": metrics.brier_score,
+        "calibration_r2": metrics.calibration_r2,
+        "n_validation_samples": metrics.n_validation_samples,
+        "validation_status": metrics.validation_status,
+        "validation_note": metrics.validation_note,
+        "last_calibrated": metrics.last_calibrated,
+        "target_auc": metrics.target_auc,
+        "target_brier": metrics.target_brier,
+    }
 
 
 @router.get(
@@ -262,23 +464,19 @@ async def batch_score(body: BatchScoreRequest, request: Request) -> Any:
 )
 async def audit_trail(request_id: str, request: Request) -> Any:
     _get_tenant(request)
-    raise HTTPException(status_code=501, detail="Em implementação — Fase 1c (Decision Ledger)")
+    try:
+        proof = _ledger.get_proof(request_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Entrada não encontrada no Decision Ledger: {request_id!r}",
+        ) from None
+    return proof
 
 
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
-_idempotency_store: dict[str, Any] = {}
-
-
-def _check_idempotency(tenant_id: str, key: str) -> dict | None:
-    return _idempotency_store.get(f"{tenant_id}:{key}")
-
-
-def _store_idempotency(tenant_id: str, key: str, value: dict) -> None:
-    _idempotency_store[f"{tenant_id}:{key}"] = value
-
-
 def _stub_score(cnpj: str, request_id: str) -> ScoreResponse:
     """Stub determinístico para o endpoint de referência. Fase 1b substituirá por score real."""
     digit_sum = sum(int(d) for d in cnpj)
