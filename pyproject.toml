@@ -28,7 +28,6 @@ omit = [
     "services/scoring/tasks.py",  # tarefa Celery — requer broker
     "services/scoring/celery_app.py",
     "services/taxpredict/*",
-    "services/audit/crosscheck/*",
 ]
 
 [tool.coverage.report]
