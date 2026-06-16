@@ -192,7 +192,10 @@ def test_build_com_todos_os_dados():
     siconfi_ant = {"valor": 10_000_000.0}
     caged_atual = {"saldo_admissoes_desligamentos": 50}
     caged_ant = {"saldo_admissoes_desligamentos": 100}
-    snis = {"cobertura_agua_pct": 45.0, "cobertura_esgoto_pct": 25.0, "lag_days": 548}
+    snis = {
+        "cobertura_agua_pct": 45.0, "cobertura_esgoto_pct": 25.0,
+        "lag_days": 548, "source_date": "2024-01-15",
+    }
 
     ind = build_indicadores_from_cache(
         cod_ibge=COD_IBGE,
@@ -208,7 +211,24 @@ def test_build_com_todos_os_dados():
     assert ind.cobertura_agua_pct == 45.0
     assert ind.cobertura_esgoto_pct == 25.0
     assert ind.source_lag_days == 548
+    # source_date e lag_days devem ser propagados para o payload da API
+    assert ind.source_date == "2024-01-15"
     assert ind.sources_missing == []
+
+
+def test_source_date_none_sem_snis():
+    """Quando SNIS indisponível, source_date deve ser None (não crashar)."""
+    ind = build_indicadores_from_cache(
+        cod_ibge=COD_IBGE,
+        referencia=REF,
+        siconfi_atual=None,
+        siconfi_anterior=None,
+        caged_atual=None,
+        caged_anterior=None,
+        snis=None,
+    )
+    assert ind.source_date is None
+    assert ind.source_lag_days == -1
 
 
 def test_build_sem_dados_publicos():

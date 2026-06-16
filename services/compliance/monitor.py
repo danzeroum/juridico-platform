@@ -56,7 +56,8 @@ class MunicipioIndicadores:
     cobertura_esgoto_pct: float | None = None
     idhm: float | None = None
     pib_per_capita: float | None = None
-    source_lag_days: int = -1  # máximo lag entre as fontes
+    source_lag_days: int = -1  # máximo lag entre as fontes (dias)
+    source_date: str | None = None  # YYYY-MM-DD da publicação mais recente
     sources_missing: list[str] | None = None
 
 
@@ -175,6 +176,7 @@ def build_indicadores_from_cache(
         sources_missing.append("SNIS")
 
     lag = snis.get("lag_days", -1) if snis else -1
+    source_date = snis.get("source_date") if snis else None
 
     return MunicipioIndicadores(
         cod_ibge=cod_ibge,
@@ -184,5 +186,6 @@ def build_indicadores_from_cache(
         cobertura_agua_pct=cob_agua,
         cobertura_esgoto_pct=cob_esgoto,
         source_lag_days=lag,
+        source_date=source_date,
         sources_missing=sources_missing,
     )
