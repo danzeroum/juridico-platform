@@ -46,7 +46,11 @@ Toda API dos 8 produtos segue uma convenção única, verificável como gate no 
 - **Rate limiting por tenant** verificado por teste de carga.
 - **Idempotência** em POSTs que criam estado: header `Idempotency-Key` nos endpoints
   de score (entrada no Ledger) e de publicação de alerta (reflete o `alert_id` já
-  existente no outbox).
+  existente no outbox). **Escopo e TTL da chave: validade de 24h, exclusivamente
+  para segurança de retry (evitar duplo processamento em falhas de rede).** Não é
+  cache de resultado: o score muda quando o dado-fonte muda, e retornar score de
+  dias atrás sob a mesma chave seria incorreto. Após 24h, nova requisição com mesmo
+  `Idempotency-Key` executa normalmente.
 - **Anti-patterns proibidos** (gate no CI): ausência de versionamento, endpoints não
   documentados, sem rate limiting, sem logs estruturados, coleções sem paginação/filtro,
   erro sem contrato `problem+json`.
@@ -109,6 +113,20 @@ Requisitos adicionais:
   acesso indevido a banco, comprometimento da chave HMAC → rotação) com cadeia de
   evidências para auditoria (Decision Ledger + audit logs imutáveis) e prazo de
   comunicação à ANPD/titulares conforme LGPD art. 48.
+- **Tensão right-to-erasure × Decision Ledger imutável (resolver na Fase 1, antes
+  de ir a produção com o LegalScore):** o ledger é append-only e retido por 7 anos
+  (obrigação regulatória — base do art. 16); o titular tem direito ao apagamento
+  (art. 18, IV). Esses dois requisitos colidem se o pseudônimo do titular estiver
+  embutido em entradas cujo hash ancora a árvore Merkle — apagar quebraria a prova
+  de integridade. **Solução obrigatória: crypto-shredding.** O pseudônimo de cada
+  titular é cifrado com uma chave simétrica por titular (ex.: AES-256-GCM, chave
+  armazenada em KMS por `titular_id`). No Ledger, o campo `subject_ref` carrega o
+  pseudônimo cifrado, não o HMAC em claro. Apagamento = destruição da chave no KMS
+  (o campo no Ledger se torna criptograficamente irrelegível, mas o hash da entrada
+  permanece intacto → integridade da árvore preservada). A retenção de 7 anos aplica-se
+  ao ledger estrutural; os dados do titular tornam-se irreversivelmente não-religáveis
+  após o apagamento da chave. Esse design deve ser descrito no `docs/ROPA.md` e
+  validado por DPO/advogado antes do go-live da Fase 1.
 
 ---
 
@@ -162,7 +180,7 @@ desde o início; não reproduzir o que está no código atual.
 
 | Arquivo | Defeito identificado | Correção |
 |---|---|---|
-| `docker/compose/base.yml` | Portas de todos os bancos expostas no host: Postgres :5432, PgBouncer :6432, Neo4j :7474/:7687, Redis :6379, MinIO :9000/:9001, ChromaDB :8001 | Remover **todos** os `ports:` das bases de dados. Apenas Traefik expõe 80/443. Acesso admin via rede interna/VPN/túnel SSH |
+| `docker/compose/base.yml` | Portas de todos os bancos expostas no host: Postgres :5432, PgBouncer :6432, Neo4j :7474/:7687, Redis :6379, MinIO :9000/:9001, ChromaDB :8001 | Remover **todos** os `ports:` das bases de dados. Apenas Traefik expõe 80/443. Em nó único (VM pública), não existe rede interna separada do host: vincular todos os serviços a `127.0.0.1` no compose (`ports: ["127.0.0.1:X:X"]` se expor temporariamente para debug local) e acessar via túnel SSH (`ssh -L`). Em cluster, usar rede overlay privada. |
 | `docker/compose/traefik.yml` | `--api.insecure=true` expõe dashboard sem autenticação | Dashboard acessível só via rede interna/VPN. Sem `--api.insecure` em produção |
 | `services/shared/lgpd.py` | SHA-256 truncado (CPF em 12 chars, nome em 10): reversível por força bruta (~10¹¹ CPFs possíveis) e truncamento causa colisão de identidade | HMAC-SHA256 com chave gerenciada em KMS/Docker Secret. Sem truncamento. Hash determinístico por chave (mesmo CPF + mesma chave → mesmo hash; chave diferente → hash diferente; não derivável do SHA-256 do CPF sem a chave) |
 | `services/shared/ledger/merkle.py` | `self.entries[-100:]` cobre só as últimas 100 entradas. `get_proof()` e `verify_integrity()` ausentes | Merkle sobre o ledger inteiro via tabela Postgres particionada + âncoras periódicas (raiz gravada a cada N entradas). Implementar `get_proof(entry_id)` e `verify_integrity(entry_id, proof)` com testes: integridade da entrada nº 1 deve ser verificável com ≥ 10k entradas |
@@ -196,6 +214,20 @@ desde o início; não reproduzir o que está no código atual.
 - Tabela de classificação pessoal × sensível das 14 fontes.
 - `services/shared/lgpd.py` reescrito com HMAC-SHA256.
 - Rotina de rotação de chave HMAC documentada (procedimento de re-pseudonimização).
+
+**Multi-tenancy e authn/authz (P1/P5 — requisito de segurança de primeira ordem):**
+- **Autenticação:** JWT com RS256 emitido por serviço de identidade (gateway valida).
+  Refresh token com rotação (invalidar no logout). Chaves públicas servidas em
+  `/.well-known/jwks.json`.
+- **Autorização (RBAC):** roles `admin`, `analyst`, `viewer` por tenant. Implementado
+  no gateway como middleware; propagado via claim JWT para os serviços downstream.
+- **Isolamento de tenant em Postgres:** Row-Level Security (RLS) com `current_setting('app.tenant_id')`
+  em todas as tabelas que contêm dados de cliente. O gateway injeta `SET LOCAL app.tenant_id = :id`
+  na conexão PgBouncer antes de qualquer query. Sem RLS ativo, a tabela não vai a produção.
+- **Isolamento em Neo4j:** cada nó e aresta carrega propriedade `tenant_id`; queries
+  sempre filtram por `tenant_id` (sem RLS nativo no Community — responsabilidade do ORM/query builder).
+- **Critério de aceite da Fase 0:** teste de isolamento: tenant A não consegue ler
+  dados do tenant B mesmo com JWT válido de A.
 
 **Observabilidade (P1):**
 - Logging JSON estruturado com contexto `request_id`, `tenant`, `source` → Loki.
@@ -231,16 +263,18 @@ desde o início; não reproduzir o que está no código atual.
 
 ### 2.5 Critérios de aceite da Fase 0
 
-- [ ] Nenhuma porta de banco exposta no host (`docker ps` confirma: só Traefik em 80/443).
+- [ ] Nenhuma porta de banco exposta no host (`docker ps` confirma: só Traefik em 80/443); serviços bound em `127.0.0.1` em VM pública; acesso admin via túnel SSH.
 - [ ] Traefik dashboard inacessível externamente; sem `--api.insecure=true`.
-- [ ] `lgpd.py`: HMAC-SHA256 com chave em Docker Secret. Teste: mesmo CPF + mesma chave → mesmo hash; mesma chave em chaves diferentes → hashes diferentes; hash não reproduzível sem a chave.
+- [ ] `lgpd.py`: HMAC-SHA256 com chave em Docker Secret. Teste: mesmo CPF + mesma chave → mesmo hash (determinístico, permite join interno); mesma chave rotacionada para chave diferente → hash diferente (separação/rotação); hash não reproduzível sem a chave (não derivável do SHA-256 puro do CPF).
 - [ ] `DecisionLedger.get_proof(entry_id)` e `verify_integrity(entry_id, proof)` implementados. Teste: integridade da entrada nº 1 verificável com ≥ 10k entradas.
 - [ ] Todos os buckets MinIO privados por padrão; teste de acesso anônimo retorna 403.
 - [ ] Contratos SEAMS nos caminhos canônicos; suítes de contrato passando no CI.
-- [ ] `docs/API-GUIDELINES.md` e `docs/ROPA.md` (com esqueleto das 14 fontes) criados.
+- [ ] `docs/API-GUIDELINES.md` e `docs/ROPA.md` (com esqueleto das 14 fontes e base legal corrigida) criados.
 - [ ] Decisão de licença Neo4j registrada neste documento.
 - [ ] CI configurado com jobs Python (unit + integração + contrato) e gate de cobertura ≥ 80%.
 - [ ] Endpoint de referência implementando todo o padrão P2 (versionamento, error contract, rate limit, OTel span, OpenAPI com exemplo).
+- [ ] **Multi-tenancy:** JWT RS256 validado no gateway; RBAC com roles `admin`/`analyst`/`viewer`; RLS ativo no Postgres; teste de isolamento: tenant A não lê dados de tenant B.
+- [ ] **Backup testado:** rotina automatizada de backup (PG `pg_dump` + Neo4j `neo4j-admin dump` + snapshot MinIO) com cópia offsite executada e **restore testado** em ambiente limpo. Sem restore testado, backup não conta como critério satisfeito — perder o ledger é perder a auditabilidade que é diferencial do produto.
 
 ---
 
@@ -325,7 +359,14 @@ Entregas:
 Critérios de aceite:
 - [ ] Load test: p95 < 1,5s; taxa de erro < 0,1% em 500 req/s sustentados.
 - [ ] Dashboard carrega em < 2s (LCP); sem erros no console.
-- [ ] Dataset de validação definido com ≥ 500 CNPJs com desfecho conhecido.
+- [ ] Dataset de validação definido com **≥ 5.000 CNPJs** com desfecho conhecido.
+  **Nota sobre tamanho:** o modelo é MLR por CNAE de 2 dígitos (~100 setores). Com
+  500 CNPJs distribuídos entre 100 setores, a média é ~5 por setor — estatisticamente
+  insuficiente para validar por setor. Duas abordagens aceitáveis: (a) pooling hierárquico
+  / encolhimento entre setores (modelo compartilha força entre setores similares), com
+  ≥ 500 CNPJs totais + relatório de N por setor; ou (b) validação flat (sem distinção
+  por setor) com ≥ 5.000 CNPJs. Registrar a abordagem escolhida no `docs/ROPA.md` e
+  nos metadados do modelo.
 - [ ] Cobertura de testes ≥ 80% no serviço de scoring.
 
 ### 3.3 Contratos e fronteiras SEAMS
@@ -359,6 +400,7 @@ Critérios de aceite:
 | IC via bootstrap (implementação errada) | Média | Alto | Revisar antes de Fase 1b; teste automatizado verifica que IC vem de sigma |
 | Coeficientes não calibrados por CNAE | Alta | Médio | Fase 1b carrega do PostgreSQL; validação contra dataset de desfechos na Fase 1d |
 | Neo4j 1 GB limite (licença developer) | Alta | Alto | Resolver decisão de licença na Fase 0 |
+| Profiling com "dado público" pode não ter base legal suficiente | Média | Alto | DATAJUD contém CPF/nomes de partes e advogados (PF); o grafo Neo4j liga empresa a sócios (PF). O §3º do art. 7º não é passe livre para profiling: a ANPD tem resistido ao uso de "público" para cruzamento/pontuação de pessoas. **Antes da Fase 1 ir a produção, DPO/advogado deve confirmar que a base se sustenta para esse cruzamento.** Se necessário, usar interesse legítimo (art. 10) com avaliação de impacto (RIPD). |
 
 ---
 
@@ -588,14 +630,20 @@ Entregas: `TaxPredictionModel` reescrito em PyMC5 com:
 - `pm.MutableData` para features do caso (permite `pm.set_data(case)` no predict).
 - Modelo hierárquico: prior nacional + nível tribunal + nível matéria.
 - Treinamento/recalibração em Celery Beat (agendado; MCMC roda offline).
-- Salvar trace serializado em MinIO; `predict(case)` carrega trace e amostra posterior predictive.
+- Salvar trace serializado em MinIO; **`predict(case)` usa trace carregado no startup
+  do processo** (não por request — carregar do MinIO a cada request estoura p95 < 3s).
+  Amostrar a preditiva posterior com N draws suficiente para IC estável e verificar
+  que cabe em < 2s; pré-computar draws se necessário.
 - IC derivado da covariância dos parâmetros (não bootstrap).
 - SHAP values via `shap.KernelExplainer` sobre o modelo treinado.
 
 Critérios de aceite:
 - [ ] `predict(case)` condiciona no caso via `pm.set_data(case)` — não retorna constante.
-- [ ] MCMC nunca roda no path da request; trace pré-computado carregado na inicialização.
-- [ ] Load test: p95 < 3s; rate de cold-start (trace reload) documentado.
+- [ ] MCMC nunca roda no path da request; trace carregado **uma vez no startup do processo**
+  (não por request). Teste: mock de MinIO offline → serviço não sobe (falha de health
+  check), não tenta carregar trace por request.
+- [ ] Load test: p95 < 3s com trace já em memória; latência de cold-start (restart do
+  processo) documentada separadamente.
 - [ ] API PyMC5 validada: nenhum import de `pymc3` ou `theano`.
 
 **Fase 3b-iii — Validação e calibração (Sem. 38–39)**
@@ -604,9 +652,10 @@ Entregas: Dataset de validação com processos tributários de desfecho conhecid
 (CARF, TJSP). Métricas AUC, Brier, curva de calibração. Dashboard de validação.
 
 Critérios de aceite:
-- [ ] AUC > 0,65 no conjunto de validação (mínimo para heurística útil).
-- [ ] Curva de calibração plotada; se calibração ruim, modelo permanece rotulado como heurística.
-- [ ] Apenas após AUC e calibração satisfatórios, score pode ser chamado de "modelo calibrado".
+- [ ] AUC > 0,65 no conjunto de validação — piso mínimo para **heurística útil** (não para "calibrado").
+- [ ] Curva de calibração plotada (reliability diagram); Brier score calculado.
+- [ ] **Limiares para rótulo "calibrado"** (registrar nos metadados do modelo antes de aplicar): AUC ≥ 0,75 **e** calibração razoável (Expected Calibration Error < 0,10 **ou** curva de calibração sem desvio sistemático visível). Abaixo desses limiares, o modelo permanece "heurística" indefinidamente — vender previsão de desfecho jurídico com AUC < 0,75 carrega risco reputacional e potencialmente jurídico.
+- [ ] Tamanho mínimo do conjunto de validação: ≥ 1.000 casos com desfecho conhecido, balanceados entre matérias (CARF + TJSP). N < 200 por matéria invalida a curva de calibração por matéria.
 
 ### 6.3 Conformidade transversal
 
@@ -755,13 +804,13 @@ SLA pós-K8s: ~99,9% (conforme Seção 1.2).
 
 | Fonte | Classificação | Base legal LGPD | Finalidade |
 |---|---|---|---|
-| Receita Federal (CNPJ) | Dado público | Art. 7º, §3º (dado público) | Enriquecimento cadastral de PJ |
-| DATAJUD | Dado público (processos) | Art. 7º, §3º + interesse legítimo (art. 10) | LegalScore, TaxPredict |
+| Receita Federal (CNPJ) | Dado público de PJ | Art. 7º, §3º | Enriquecimento cadastral de PJ |
+| DATAJUD | Dado público (processos); contém PF (partes, advogados, sócios) | Art. 7º, §3º como ponto de partida; **validar com DPO se sustenta para profiling/cruzamento com PF** | LegalScore, TaxPredict |
 | PGFN | Dado público | Art. 7º, §3º | LegalScore |
 | CAGED | Dado agregado (sem PF identificável) | Interesse legítimo (art. 10) | ContabilIA CC01 |
 | SICONFI | Dado público de ente público | Art. 7º, §3º | ContabilIA, ComplianceRadar |
 | PNCP | Dado público | Art. 7º, §3º | ContabilIA CC03, LicitaWatch |
-| **DATASUS/SIH** | **Dado sensível — saúde (art. 11)** | **Pesquisa ou interesse público legítimo com salvaguardas** | ComplianceRadar, DanoBot |
+| **DATASUS/SIH** | **Dado de saúde (sensível, art. 11). Ver nota abaixo.** | **A determinar pelo DPO antes da Fase 3** | ComplianceRadar, DanoBot |
 | SNIS | Dado público de ente público | Art. 7º, §3º | ComplianceRadar |
 | INEP | Dado público | Art. 7º, §3º | ComplianceRadar, DanoBot |
 | ComexStat | Dado público | Art. 7º, §3º | ContabilIA CC04 |
@@ -770,9 +819,32 @@ SLA pós-K8s: ~99,9% (conforme Seção 1.2).
 | BCB/ESTBAN | Dado público | Art. 7º, §3º | ComplianceRadar |
 | IBGE | Dado público | Art. 7º, §3º | ComplianceRadar, DanoBot |
 
-> **DATASUS é dado sensível (saúde, art. 11 LGPD).** Todo processamento requer
-> base legal específica, k-anonymity reforçada (células < 5 suprimidas) e
-> nenhum dado identificável no payload de alertas ou no laudo.
+> **DATASUS — bloqueador para as Fases 3 e 4 (consultar DPO antes de codar).**
+>
+> O DATASUS/SIH é dado de saúde (sensível, LGPD art. 11). O art. 11 tem lista
+> **fechada** de hipóteses autorizadoras — e **interesse legítimo (art. 10) não consta
+> dessa lista**. Para uma empresa privada com produto comercial, nenhuma hipótese do
+> art. 11 encaixa automaticamente.
+>
+> **O caminho defensável é usar os dados exclusivamente de forma agregada e anonimizada
+> por município (indicadores municipais de saúde, ex.: cobertura, taxa de internação),
+> de modo que os registros individuais nunca sejam processados identificados.** Se a
+> anonimização for real (art. 12 — risco de reidentificação avaliado e aceito), os
+> dados saem do escopo do art. 11 e a base legal passa a ser art. 7º §3º (dado público
+> tornado acessível) ou interesse legítimo (art. 10) para a finalidade estatística.
+>
+> **Ação obrigatória antes da Fase 3:** (a) confirmar com DPO que o processamento é
+> exclusivamente agregado/anônimo; (b) fazer avaliação de risco de reidentificação
+> (especialmente para municípios pequenos onde k-anonymity com k=5 pode não ser
+> suficiente); (c) registrar a decisão no `docs/ROPA.md` com parecer jurídico.
+> Sem esse parecer, a Fase 3 (ComplianceRadar) e a Fase 4 (DanoBot) não vão a produção.
+>
+> **Nota sobre "dado público" (art. 7º, §3º) em geral:** o §3º não é passe livre para
+> cruzamento e profiling. A ANPD tem posição de que uso de dado público para finalidade
+> incompatível com a original (ex.: pontuar risco de empresa com dado de processos que
+> envolvem PF) pode exigir base adicional (interesse legítimo, art. 10, com RIPD).
+> O ROPA deve registrar a finalidade original de cada fonte e a finalidade do produto,
+> e o DPO deve confirmar compatibilidade antes do go-live.
 
 ---
 
@@ -784,17 +856,19 @@ SLA pós-K8s: ~99,9% (conforme Seção 1.2).
 ### Por fase
 
 **Fase 0 — Obrigatório antes de qualquer produto:**
-- [ ] Nenhuma porta de banco exposta no host.
+- [ ] Nenhuma porta de banco exposta no host; serviços em `127.0.0.1` em VM pública.
 - [ ] Traefik dashboard seguro (sem `--api.insecure`).
 - [ ] HMAC-SHA256 com chave Docker Secret para pseudonimização; sem SHA-256 simples; sem truncamento.
 - [ ] Buckets MinIO privados; acesso anônimo retorna 403.
 - [ ] Decision Ledger: `get_proof()` e `verify_integrity()` implementados e testados.
 - [ ] Contratos SEAMS nos caminhos canônicos; suítes de contrato passando.
 - [ ] `docs/API-GUIDELINES.md` criado; endpoint de referência conforme o padrão.
-- [ ] `docs/ROPA.md` com base legal das 14 fontes e classificação pessoal × sensível.
+- [ ] `docs/ROPA.md` com base legal das 14 fontes, classificação pessoal × sensível, e design de crypto-shredding para right-to-erasure.
 - [ ] Decisão de licença Neo4j registrada.
 - [ ] CI com jobs unit + integração + contrato; gate de cobertura ≥ 80%.
 - [ ] SLA honesto por fase documentado; badge README atualizado.
+- [ ] **Multi-tenancy:** JWT RS256 no gateway; RLS ativo no Postgres; teste de isolamento tenant A ≠ tenant B.
+- [ ] **Backup + restore testado:** pg_dump + neo4j-admin + MinIO snapshot automatizados; restore executado em ambiente limpo com sucesso.
 
 **Por produto (repetido em cada fase):**
 - [ ] API na convenção `/api/v1/{produto}/{recurso}`; versionamento único.
@@ -847,7 +921,9 @@ Um produto está "completo" quando todos os itens abaixo estão verdes:
 7. Fronteiras de migração com contrato + suíte de contrato no lugar (mesmo que Python puro hoje).
 8. Observabilidade: logs/métricas/tracing e playbook de incidentes.
 9. OpenAPI 3.1 com exemplos reais de resposta.
-10. ROPA atualizado com base legal do produto; dado sensível identificado e protegido.
+10. ROPA atualizado com base legal do produto; dado sensível identificado e protegido; parecer DPO para DATASUS/profiling com PF.
+11. Right-to-erasure implementado via crypto-shredding (destruição de chave KMS por titular) — não por deleção de entradas do Ledger.
+12. Backup automatizado com restore testado em ambiente limpo.
 
 ---
 
