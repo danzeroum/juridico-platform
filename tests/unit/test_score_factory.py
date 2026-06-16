@@ -62,3 +62,69 @@ def test_python_engine_healthy():
     from services.scoring.engine.engines import PythonScoreEngine
     e = PythonScoreEngine()
     assert e.healthy() is True
+
+
+# ---------------------------------------------------------------------------
+# _FallbackEngine — testado diretamente com mocks
+# ---------------------------------------------------------------------------
+
+class _StubEngine:
+    def __init__(self, name: str, healthy: bool = True, raise_on_score=None):
+        self.name = name
+        self._healthy = healthy
+        self._raise = raise_on_score
+
+    def healthy(self) -> bool:
+        return self._healthy
+
+    def score(self, request):
+        if self._raise:
+            raise self._raise
+        from services.shared.contracts.scoring import ScoreResult
+        return ScoreResult(
+            score=777,
+            confidence_interval=(700, 800),
+            risk_level="BAIXO",
+            engine=self.name,
+            breakdown={},
+            contract_version="scoring/v1",
+        )
+
+
+def test_fallback_engine_healthy_when_primary_ok():
+    from services.scoring.engine.factory import _FallbackEngine
+    fb = _FallbackEngine(_StubEngine("p", healthy=True), _StubEngine("s", healthy=False))
+    assert fb.healthy() is True
+    assert fb.name == "p->s"
+
+
+def test_fallback_engine_healthy_when_secondary_ok():
+    from services.scoring.engine.factory import _FallbackEngine
+    fb = _FallbackEngine(_StubEngine("p", healthy=False), _StubEngine("s", healthy=True))
+    assert fb.healthy() is True
+
+
+def test_fallback_engine_healthy_false_when_both_down():
+    from services.scoring.engine.factory import _FallbackEngine
+    fb = _FallbackEngine(_StubEngine("p", healthy=False), _StubEngine("s", healthy=False))
+    assert fb.healthy() is False
+
+
+def test_fallback_engine_score_uses_primary():
+    from services.scoring.engine.factory import _FallbackEngine
+    from services.shared.contracts.scoring import ScoreRequest
+    fb = _FallbackEngine(_StubEngine("p"), _StubEngine("s"))
+    req = ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={})
+    result = fb.score(req)
+    assert result.score == 777
+
+
+def test_fallback_engine_score_falls_back_on_unavailable():
+    from services.scoring.engine.factory import _FallbackEngine
+    from services.shared.contracts.scoring import ScoreRequest, ScoringUnavailable
+    primary = _StubEngine("p", raise_on_score=ScoringUnavailable("boom"))
+    secondary = _StubEngine("s")
+    fb = _FallbackEngine(primary, secondary)
+    req = ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={})
+    result = fb.score(req)
+    assert result.score == 777
