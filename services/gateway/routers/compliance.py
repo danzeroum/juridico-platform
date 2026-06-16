@@ -96,6 +96,7 @@ def _build_summary(cod_ibge: str, r) -> dict:
             "cobertura_agua_pct": ind.cobertura_agua_pct,
             "cobertura_esgoto_pct": ind.cobertura_esgoto_pct,
             "source_lag_days": ind.source_lag_days,
+            "source_date": ind.source_date,
         },
         "sources_missing": ind.sources_missing or [],
         "active_alerts": len(alerts),

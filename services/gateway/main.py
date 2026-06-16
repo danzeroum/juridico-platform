@@ -18,6 +18,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from services.gateway.middleware import (
@@ -191,38 +192,73 @@ def jwks() -> JSONResponse:
 
 
 # ---------------------------------------------------------------------------
-# Handler global de erros → problem+json
+# Handlers globais de erros → application/problem+json (RFC 9457)
 # ---------------------------------------------------------------------------
+def _problem_json(
+    status_code: int,
+    detail: object,
+    instance: str,
+    *,
+    type_suffix: str | None = None,
+    title: str | None = None,
+) -> JSONResponse:
+    """Constrói resposta application/problem+json a partir de qualquer detalhe.
+
+    Se `detail` já é um dict problem+json completo (tem type+title+status),
+    passa-o diretamente para evitar double-wrapping.
+    """
+    if (
+        isinstance(detail, dict)
+        and "type" in detail
+        and "title" in detail
+        and "status" in detail
+    ):
+        body = detail
+        if "instance" not in body:
+            body = {**body, "instance": instance}
+    else:
+        body = {
+            "type": f"https://juridico-platform/errors/{type_suffix or status_code}",
+            "title": title or _status_title(status_code),
+            "status": status_code,
+            "detail": detail,
+            "instance": instance,
+            "contract_version": "1.0",
+        }
+    return JSONResponse(
+        status_code=status_code,
+        content=body,
+        headers={"Content-Type": "application/problem+json"},
+    )
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "type": f"https://juridico-platform/errors/{exc.status_code}",
-            "title": _status_title(exc.status_code),
-            "status": exc.status_code,
-            "detail": exc.detail,
-            "instance": str(request.url.path),
-            "contract_version": "1.0",
-        },
-        headers={"Content-Type": "application/problem+json"},
+    return _problem_json(exc.status_code, exc.detail, str(request.url.path))
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    errors = exc.errors()
+    detail = "; ".join(
+        f"{' → '.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in errors
+    )
+    return _problem_json(
+        422,
+        detail,
+        str(request.url.path),
+        type_suffix="validation-error",
+        title="Erro de validação",
     )
 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Erro interno em %s", request.url.path)
-    return JSONResponse(
-        status_code=500,
-        content={
-            "type": "https://juridico-platform/errors/500",
-            "title": "Erro interno do servidor",
-            "status": 500,
-            "detail": "Ocorreu um erro interno. Tente novamente ou contate o suporte.",
-            "instance": str(request.url.path),
-            "contract_version": "1.0",
-        },
-        headers={"Content-Type": "application/problem+json"},
+    return _problem_json(
+        500,
+        "Ocorreu um erro interno. Tente novamente ou contate o suporte.",
+        str(request.url.path),
     )
 
 
@@ -230,6 +266,7 @@ def _status_title(status: int) -> str:
     return {
         400: "Requisição inválida",
         401: "Não autenticado",
+        402: "Pagamento necessário",
         403: "Não autorizado",
         404: "Recurso não encontrado",
         409: "Conflito",
@@ -237,4 +274,5 @@ def _status_title(status: int) -> str:
         429: "Rate limit excedido",
         500: "Erro interno do servidor",
         501: "Não implementado",
+        503: "Serviço indisponível",
     }.get(status, "Erro")
