@@ -72,6 +72,21 @@ class TestAssemblePetition:
         for s in resp.secoes:
             assert s.conteudo != ""
 
+    def test_com_rag_disponivel_conta_precedentes(self, monkeypatch):
+        """Quando RAG retorna resultados, precedentes_encontrados > 0."""
+        from unittest.mock import MagicMock
+
+        import services.shared.ai.rag as rag_mod
+        mock_instance = MagicMock()
+        mock_instance.search.return_value = [
+            {"id": "doc-1", "document": "Precedente 1", "metadata": {}, "distance": 0.1},
+            {"id": "doc-2", "document": "Precedente 2", "metadata": {}, "distance": 0.2},
+        ]
+        # RAGEngine is imported inside _lookup_precedentes, so patch the source
+        monkeypatch.setattr(rag_mod, "RAGEngine", lambda **kwargs: mock_instance)
+        resp = assemble_petition(_make_req())
+        assert resp.precedentes_encontrados == 2
+
     def test_todos_os_tipos_funcionam(self):
         base = "Descrição longa o suficiente para servir de base à petição judicial em questão."
         for tipo in TipoAcao:
