@@ -1,0 +1,7 @@
+# Product compose override placeholder for LegalScore
+services:
+  legalscore-api:
+    build:
+      context: ../..
+      dockerfile: services/gateway/Dockerfile
+    container_name: legalscore-api

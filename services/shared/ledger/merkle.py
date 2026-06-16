@@ -1,116 +1,34 @@
-"""
-Decision Ledger com Merkle Tree
-Garante imutabilidade e auditabilidade de todas as decisoes automatizadas.
-Essencial para compliance com BACEN, CVM e LGPD.
-"""
-
 import hashlib
 import json
 from datetime import datetime
-from typing import List, Dict, Any, Optional
-import logging
-
-logger = logging.getLogger(__name__)
-
-
-class MerkleNode:
-    def __init__(self, left=None, right=None, data: Optional[str] = None):
-        self.left = left
-        self.right = right
-        self.data = data
-        self.hash = self._compute_hash()
-
-    def _compute_hash(self) -> str:
-        if self.data:
-            return hashlib.sha256(self.data.encode()).hexdigest()
-        if self.left and self.right:
-            combined = self.left.hash + self.right.hash
-            return hashlib.sha256(combined.encode()).hexdigest()
-        if self.left:
-            return hashlib.sha256((self.left.hash * 2).encode()).hexdigest()
-        return hashlib.sha256(b"").hexdigest()
-
-
-def build_merkle_tree(leaves: List[str]) -> str:
-    """Constroi Merkle tree e retorna o root hash."""
-    if not leaves:
-        return hashlib.sha256(b"").hexdigest()
-
-    nodes = [MerkleNode(data=leaf) for leaf in leaves]
-
-    while len(nodes) > 1:
-        if len(nodes) % 2 != 0:
-            nodes.append(nodes[-1])  # duplicar ultimo se impar
-        new_level = []
-        for i in range(0, len(nodes), 2):
-            parent = MerkleNode(left=nodes[i], right=nodes[i + 1])
-            new_level.append(parent)
-        nodes = new_level
-
-    return nodes[0].hash
+from typing import Any
 
 
 class DecisionLedger:
-    """
-    Ledger append-only para audit trail de decisoes automatizadas.
-    Cada entrada e imutavel e verificavel via Merkle proof.
-    """
+    def __init__(self):
+        self.entries = []
+        self.merkle_root = None
 
-    def __init__(self, db_session):
-        self.db = db_session
-        self._entries_cache: List[Dict] = []
-
-    def add_entry(
-        self,
-        product: str,
-        request_id: str,
-        user_hash: Optional[str],
-        inputs: Dict[str, Any],
-        outputs: Dict[str, Any],
-        sources: List[str],
-        weights: Dict[str, float],
-    ) -> str:
-        """Adiciona entrada no ledger e retorna o Merkle root atualizado."""
-
+    def add_entry(self, request_id: str, product: str, inputs: dict[str, Any], outputs: dict[str, Any], sources: list[str] | None = None, weights: dict[str, Any] | None = None) -> dict[str, Any]:
         entry = {
-            "product": product,
-            "request_id": request_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "user_hash": user_hash,
-            "inputs_hash": hashlib.sha256(
-                json.dumps(inputs, sort_keys=True).encode()
-            ).hexdigest(),
-            "outputs_hash": hashlib.sha256(
-                json.dumps(outputs, sort_keys=True).encode()
-            ).hexdigest(),
-            "sources": sources,
-            "weights_applied": weights,
+            'request_id': request_id,
+            'timestamp': datetime.utcnow().isoformat(),
+            'product': product,
+            'inputs_hash': hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest(),
+            'outputs_hash': hashlib.sha256(json.dumps(outputs, sort_keys=True).encode()).hexdigest(),
+            'sources': sources or [],
+            'weights_applied': weights or {},
         }
+        self.entries.append(entry)
+        self.merkle_root = self._update_merkle_root()
+        return entry
 
-        self._entries_cache.append(entry)
-
-        # Recalcular Merkle root com as ultimas 100 entradas
-        recent_hashes = [
-            hashlib.sha256(
-                json.dumps(e, sort_keys=True).encode()
-            ).hexdigest()
-            for e in self._entries_cache[-100:]
-        ]
-        merkle_root = build_merkle_tree(recent_hashes)
-        entry["merkle_root"] = merkle_root
-
-        # Persistir no PostgreSQL (append-only via trigger)
-        self._persist(entry)
-
-        logger.info(f"Ledger entry adicionada: {request_id} | root: {merkle_root[:8]}...")
-        return merkle_root
-
-    def _persist(self, entry: Dict) -> None:
-        """Persiste entrada no PostgreSQL."""
-        # TODO: implementar com SQLAlchemy na Fase 1
-        pass
-
-    def verify_integrity(self, request_id: str) -> bool:
-        """Verifica se um registro nao foi alterado desde sua criacao."""
-        # TODO: implementar busca + verificacao de Merkle proof na Fase 1
-        raise NotImplementedError
+    def _update_merkle_root(self) -> str:
+        leaves = [hashlib.sha256(json.dumps(e, sort_keys=True).encode()).hexdigest() for e in self.entries[-100:]]
+        if not leaves:
+            return hashlib.sha256(b'').hexdigest()
+        while len(leaves) > 1:
+            if len(leaves) % 2 == 1:
+                leaves.append(leaves[-1])
+            leaves = [hashlib.sha256((leaves[i] + leaves[i + 1]).encode()).hexdigest() for i in range(0, len(leaves), 2)]
+        return leaves[0]
