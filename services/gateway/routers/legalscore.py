@@ -30,6 +30,7 @@ from services.scoring.idempotency import (
 from services.shared.contracts.scoring import ScoreRequest as EngineScoreRequest
 from services.shared.ledger.merkle import DecisionLedger
 from services.shared.lgpd import hash_user_id
+from services.shared.lgpd_crypto import encrypt_for_ledger
 
 # OTel — graceful degradation
 try:
@@ -212,7 +213,9 @@ async def score_company(
         inputs_for_ledger = {"cnpj_partial": body.cnpj[:6] + "****", "features": (fv.features if fv else {})}
         outputs_for_ledger = {"score": result.score, "risk_level": result.risk_level}
         sources = fv.sources_used if fv else []
-        subject_token = hash_user_id(body.cnpj)  # CNPJ pseudonimizado (público)
+        # subject_token: AES-256-GCM por titular (crypto-shredding via erase_titular)
+        pseudonym = hash_user_id(body.cnpj)
+        subject_token = encrypt_for_ledger(pseudonym, tenant_id)
         _ledger.add_entry(
             request_id=request_id,
             product="legalscore",
