@@ -134,3 +134,14 @@ def test_benford_mad_entre_zero_e_um():
 ])
 def test_benford_expected_valores_matematicos(d: int, expected: float):
     assert abs(BENFORD_EXPECTED[d] - expected) < 1e-10
+
+
+def test_benford_marginal():
+    """Distribuição ligeiramente desviada de Benford → status MARGINAL (0.006 < MAD < 0.012)."""
+    # Counts calculados para produzir MAD ≈ 0.008 (MARGINAL)
+    digit_counts = {1: 80, 2: 63, 3: 38, 4: 29, 5: 24, 6: 20, 7: 17, 8: 15, 9: 14}
+    values: list[float] = []
+    for d, n in digit_counts.items():
+        values.extend([float(f"{d}000")] * n)
+    result = analyze_benford(values, column="test_marginal")
+    assert result.status == "MARGINAL", f"Esperado MARGINAL, obtido {result.status} (MAD={result.mad})"

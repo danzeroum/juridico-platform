@@ -75,11 +75,13 @@ class TestDatajudProcessoBronze:
 
     def test_cnpj_parte_none_passthrough(self):
         DatajudProcessoBronze = self._import()
+        # Pydantic v2: validator só roda com valor explícito; usar None explícito.
         rec = DatajudProcessoBronze(
             id_processo="p1",
             numero_processo="n",
             data_julgamento="2024-01-01",
             tribunal="TJSP",
+            cnpj_parte=None,
         )
         assert rec.cnpj_parte is None
 
