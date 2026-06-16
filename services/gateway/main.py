@@ -1,14 +1,222 @@
-from fastapi import FastAPI
+"""
+Gateway principal — juridico-platform.
+
+Endpoint de referência (P2 compliance completo):
+  POST /api/v1/legalscore/score
+    - JWT RS256 (via JWTAuthMiddleware)
+    - Rate limit por tenant (via RateLimitMiddleware)
+    - Idempotency-Key (24h, retry-safety only)
+    - problem+json em todos os erros
+    - OTel span por request
+    - OpenAPI 3.1 com exemplos reais
+
+Todos os outros endpoints seguem este padrão.
+"""
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-app = FastAPI(title='juridico-platform-gateway', version='0.1.0')
+from services.gateway.middleware import (
+    JWTAuthMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
+
+# OTel — graceful degradation se SDK não instalado
+try:
+    from opentelemetry import trace
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    _OTEL_AVAILABLE = True
+except ImportError:
+    _OTEL_AVAILABLE = False
+    trace = None  # type: ignore[assignment]
+
+# Prometheus
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    _PROM_AVAILABLE = True
+except ImportError:
+    _PROM_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
-@app.get('/health')
-def health():
-    return {'status': 'healthy', 'service': 'gateway'}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Setup de observabilidade no startup."""
+    _setup_logging()
+    _setup_otel()
+    _setup_prometheus(app)
+    logger.info("Gateway iniciado. Versão 0.2.0")
+    yield
+    logger.info("Gateway encerrando.")
 
 
-@app.get('/')
-def root():
-    return JSONResponse({'name': 'juridico-platform-gateway', 'version': '0.1.0'})
+def _setup_logging() -> None:
+    import json
+    import sys
+
+    class JsonFormatter(logging.Formatter):
+        def format(self, record: logging.LogRecord) -> str:
+            log = {
+                "level": record.levelname,
+                "name": record.name,
+                "message": record.getMessage(),
+                "timestamp": self.formatTime(record),
+            }
+            if record.exc_info:
+                log["exc_info"] = self.formatException(record.exc_info)
+            return json.dumps(log, ensure_ascii=False)
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JsonFormatter())
+    root.handlers = [handler]
+
+
+def _setup_otel() -> None:
+    if not _OTEL_AVAILABLE:
+        logger.warning("OpenTelemetry não instalado — tracing desabilitado.")
+        return
+    import os
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+    if not endpoint:
+        logger.info("OTEL_EXPORTER_OTLP_ENDPOINT não configurado — tracing local apenas.")
+        provider = TracerProvider()
+    else:
+        provider = TracerProvider()
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
+    trace.set_tracer_provider(provider)
+
+
+def _setup_prometheus(app: FastAPI) -> None:
+    if not _PROM_AVAILABLE:
+        logger.warning("prometheus-fastapi-instrumentator não instalado — métricas desabilitadas.")
+        return
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
+
+app = FastAPI(
+    title="juridico-platform-gateway",
+    version="0.2.0",
+    description="Gateway de API — Plataforma Jurídico-Contábil",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
+
+# Middlewares (ordem: externo → interno)
+app.add_middleware(JWTAuthMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# Registrar routers dos produtos
+from services.gateway.routers import auth, health, legalscore  # noqa: E402
+
+app.include_router(health.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1/auth")
+app.include_router(legalscore.router, prefix="/api/v1/legalscore")
+
+
+# ---------------------------------------------------------------------------
+# Raiz
+# ---------------------------------------------------------------------------
+@app.get("/", include_in_schema=False)
+def root() -> JSONResponse:
+    return JSONResponse({
+        "name": "juridico-platform-gateway",
+        "version": "0.2.0",
+        "docs": "/docs",
+    })
+
+
+# ---------------------------------------------------------------------------
+# JWKS — chave pública para validação externa de tokens
+# ---------------------------------------------------------------------------
+@app.get("/.well-known/jwks.json", include_in_schema=False)
+def jwks() -> JSONResponse:
+    try:
+        import base64
+
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+        from services.gateway.auth.jwt import get_public_key_pem
+
+        pub_pem = get_public_key_pem().encode()
+        pub_key = load_pem_public_key(pub_pem)
+        pub_numbers = pub_key.public_key().public_numbers()  # type: ignore[union-attr]
+
+        def _b64url(n: int) -> str:
+            length = (n.bit_length() + 7) // 8
+            return base64.urlsafe_b64encode(n.to_bytes(length, "big")).rstrip(b"=").decode()
+
+        return JSONResponse({
+            "keys": [{
+                "kty": "RSA",
+                "use": "sig",
+                "alg": "RS256",
+                "n": _b64url(pub_numbers.n),
+                "e": _b64url(pub_numbers.e),
+            }]
+        })
+    except Exception:
+        from services.gateway.auth.jwt import get_public_key_pem
+        return JSONResponse({"keys": [{"kty": "RSA", "use": "sig", "alg": "RS256", "pem": get_public_key_pem()}]})
+
+
+# ---------------------------------------------------------------------------
+# Handler global de erros → problem+json
+# ---------------------------------------------------------------------------
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "type": f"https://juridico-platform/errors/{exc.status_code}",
+            "title": _status_title(exc.status_code),
+            "status": exc.status_code,
+            "detail": exc.detail,
+            "instance": str(request.url.path),
+            "contract_version": "1.0",
+        },
+        headers={"Content-Type": "application/problem+json"},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Erro interno em %s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "type": "https://juridico-platform/errors/500",
+            "title": "Erro interno do servidor",
+            "status": 500,
+            "detail": "Ocorreu um erro interno. Tente novamente ou contate o suporte.",
+            "instance": str(request.url.path),
+            "contract_version": "1.0",
+        },
+        headers={"Content-Type": "application/problem+json"},
+    )
+
+
+def _status_title(status: int) -> str:
+    return {
+        400: "Requisição inválida",
+        401: "Não autenticado",
+        403: "Não autorizado",
+        404: "Recurso não encontrado",
+        409: "Conflito",
+        422: "Entidade não processável",
+        429: "Rate limit excedido",
+        500: "Erro interno do servidor",
+        501: "Não implementado",
+    }.get(status, "Erro")

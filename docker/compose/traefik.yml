@@ -1,6 +1,8 @@
 # =============================================================================
 # TRAEFIK v3 - Reverse proxy + TLS automático (Let's Encrypt)
 # ATENÇÃO: chmod 600 data/acme/acme.json antes de subir em produção!
+# SEGURANÇA: dashboard NÃO exposto externamente. Acesso via túnel SSH:
+#   ssh -L 8080:traefik:8080 user@host → http://localhost:8080/dashboard/
 # =============================================================================
 
 services:
@@ -10,7 +12,8 @@ services:
     container_name: traefik
     restart: unless-stopped
     command:
-      - "--api.insecure=true"
+      # API habilitada mas SEM modo insecure — acesso só via rede interna
+      - "--api=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
@@ -22,10 +25,15 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme/acme.json"
       - "--log.level=INFO"
       - "--accesslog=true"
+      - "--accesslog.format=json"
+      # Entrypoint interno para dashboard (não exposto no host)
+      - "--entrypoints.traefik.address=:8080"
+      - "--api.dashboard=true"
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
+      # Dashboard apenas via localhost/túnel SSH — NÃO publicar em 0.0.0.0:8080
+      - "127.0.0.1:8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_acme:/data/acme
@@ -36,3 +44,10 @@ services:
         limits:
           memory: 256M
           cpus: "0.5"
+
+networks:
+  juridico-net:
+    driver: bridge
+
+volumes:
+  traefik_acme:

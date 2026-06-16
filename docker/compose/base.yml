@@ -1,7 +1,10 @@
 # =============================================================================
 # BASE - Stack compartilhado: PostgreSQL, PgBouncer, Neo4j, OpenSearch,
 #        Redis, MinIO, ChromaDB
-# Todos os produtos dependem deste arquivo
+# SEGURANÇA: nenhuma porta de banco exposta no host.
+#            Apenas Traefik expõe 80/443.
+#            Em VM pública (nó único): serviços bound a 127.0.0.1 internamente.
+#            Acesso admin via túnel SSH: ssh -L 5432:postgres:5432 user@host
 # =============================================================================
 
 services:
@@ -20,8 +23,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./scripts/bootstrap-db.sql:/docker-entrypoint-initdb.d/01-init.sql
-    ports:
-      - "5432:5432"
+    # SEM ports: no host — acesso somente via rede interna ou túnel SSH
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
@@ -37,6 +39,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # PgBouncer - Pool de conexões (OBRIGATÓRIO - nunca conectar direto ao PG)
+  # pool_mode: transaction — ATENÇÃO: usar SET LOCAL (não SET) para tenant_id
   # ---------------------------------------------------------------------------
   pgbouncer:
     image: edoburu/pgbouncer:1.20
@@ -51,8 +54,7 @@ services:
       PGBOUNCER_POOL_MODE: transaction
       PGBOUNCER_MAX_CLIENT_CONN: 1000
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
-    ports:
-      - "6432:6432"
+    # SEM ports: no host
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,11 +67,12 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------------------
-  # Neo4j 5 Enterprise - Grafo de relações societárias e processos
-  # Licença developer gratuita até 1GB de grafo
+  # Neo4j 5 Community - Grafo de relações societárias e processos
+  # Community: gratuito, sem clustering nativo. Adequado para Fases 0-2.
+  # Para Fase 3 (HA): avaliar Enterprise (ver Pendencia.md PD-01).
   # ---------------------------------------------------------------------------
   neo4j:
-    image: neo4j:5-enterprise
+    image: neo4j:5-community
     container_name: neo4j
     restart: unless-stopped
     volumes:
@@ -79,10 +82,7 @@ services:
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
       NEO4J_server_mode: "SINGLE"
-      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
-    ports:
-      - "7474:7474"
-      - "7687:7687"
+    # SEM ports: no host
     networks:
       - juridico-net
     healthcheck:
@@ -109,8 +109,7 @@ services:
       - DISABLE_SECURITY_PLUGIN=true
     volumes:
       - opensearch_data:/usr/share/opensearch/data
-    ports:
-      - "9200:9200"
+    # SEM ports: no host
     networks:
       - juridico-net
     healthcheck:
@@ -125,7 +124,7 @@ services:
           cpus: "2"
 
   # ---------------------------------------------------------------------------
-  # Redis 7 + Sentinel - Cache, sessões, Celery broker
+  # Redis 7 - Cache, sessões, Celery broker
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
@@ -139,8 +138,7 @@ services:
       --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    # SEM ports: no host
     networks:
       - juridico-net
     healthcheck:
@@ -156,6 +154,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # MinIO - Data Lake S3-compatível (bronze/silver/gold)
+  # Todos os buckets são PRIVADOS por padrão (sem acesso anônimo).
   # ---------------------------------------------------------------------------
   minio:
     image: minio/minio:latest
@@ -167,18 +166,16 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
     volumes:
       - minio_data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+    # SEM ports: no host — console e API só via rede interna ou túnel SSH
     networks:
       - juridico-net
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "mc ready local 2>/dev/null || curl -sf http://localhost:9000/minio/health/live"]
       interval: 15s
       timeout: 10s
       retries: 5
 
-  # Inicialização dos buckets MinIO
+  # Inicialização dos buckets MinIO - todos privados, sem acesso anônimo
   minio-init:
     image: minio/mc:latest
     container_name: minio-init
@@ -193,10 +190,15 @@ services:
       mc mb local/gold --ignore-existing;
       mc mb local/documents --ignore-existing;
       mc mb local/backups --ignore-existing;
+      mc anonymous set none local/bronze;
+      mc anonymous set none local/silver;
+      mc anonymous set none local/gold;
+      mc anonymous set none local/documents;
+      mc anonymous set none local/backups;
       mc version enable local/bronze;
       mc version enable local/silver;
       mc version enable local/gold;
-      echo 'MinIO buckets configurados';
+      echo 'MinIO: buckets configurados e acesso anônimo desabilitado em todos.';
       exit 0;
       "
     networks:
@@ -211,8 +213,7 @@ services:
     restart: unless-stopped
     volumes:
       - chromadb_data:/chroma/chroma
-    ports:
-      - "8001:8000"
+    # SEM ports: no host
     networks:
       - juridico-net
     healthcheck:
@@ -225,3 +226,16 @@ services:
         limits:
           memory: 2G
           cpus: "1"
+
+networks:
+  juridico-net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  neo4j_data:
+  neo4j_logs:
+  opensearch_data:
+  redis_data:
+  minio_data:
+  chromadb_data:

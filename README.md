@@ -2,7 +2,7 @@
 
 > **Plataforma Jurídico-Contábil Docker-First** — IA aplicada ao direito e contabilidade brasileira
 
-[![SLA](https://img.shields.io/badge/SLA-99.5%25-brightgreen)](#)
+[![SLA](https://img.shields.io/badge/SLA-99.0%25_n%C3%B3_único-yellow)](#)
 [![Produtos](https://img.shields.io/badge/produtos-8-blue)](#)
 [![Stack](https://img.shields.io/badge/stack-Docker%20Compose-2496ED)](#)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#)
@@ -108,8 +108,8 @@ make dash         # Abre Grafana + Prometheus + Flower
 
 | Fase | Semanas | Produto | Milestone |
 |------|---------|---------|----------|
-| 0 | 1-3 | Infra | Setup, bootstrap, health checks |
-| 1 | 4-13 | LegalScore PJ | v1.0 com SLA 99.5% |
+| 0 | 1-3 | Infra | Segurança + fundações transversais (ver ROADMAP.md) |
+| 1 | 4-13 | LegalScore PJ | v1.0 — SLA ~99,0% (nó único) |
 | 2 | 14-23 | ContabilIA | v1.0 com 8 cross-checks |
 | 3 | 24-39 | ComplianceRadar + TaxPredict | v1.0 |
 | 4 | 40-52 | Produtos secundários + K8s | Deploy produção |
@@ -117,7 +117,7 @@ make dash         # Abre Grafana + Prometheus + Flower
 ## Compliance
 
 - **LGPD by design**: pseudonimização no ingest, k-anonymity, right-to-erasure
-- **Decision Ledger**: audit trail imutável com Merkle tree para BACEN/CVM
+- **Decision Ledger**: audit trail imutável com Merkle tree; hasheia inputs/outputs (não PII diretamente — PII é pseudonimizado via HMAC-SHA256 antes de qualquer persistência)
 - **TLS 1.3**: em todas as conexões (Traefik + Let's Encrypt)
 - **Docker Secrets**: credenciais nunca em variáveis de ambiente
 

@@ -6,14 +6,14 @@ Se tudo falhar: score parcial com flag de desatualizacao
 """
 
 import json
-import requests
 from datetime import datetime, timedelta
+
+import requests
 from celery.utils.log import get_task_logger
-from tenacity import retry, stop_after_attempt, wait_exponential
 from ingest.celery_app import app
 from shared.config import settings
-from shared.redis_client import get_redis
 from shared.lgpd import pseudonymize_process_record
+from shared.redis_client import get_redis
 
 logger = get_task_logger(__name__)
 
@@ -55,11 +55,11 @@ def run_daily_ingest(self, date: str = None):
             data = json.loads(cached)
         else:
             logger.error(f"DATAJUD indisponivel, agendando retry em 1h: {exc}")
-            raise self.retry(exc=DatajudUnreachable("API fora de servico"), countdown=60 * 60)
+            raise self.retry(exc=DatajudUnreachable("API fora de servico"), countdown=60 * 60) from None
 
     processed = 0
     for record in data.get("items", []):
-        safe = pseudonymize_process_record(record)
+        _safe = pseudonymize_process_record(record)
         # TODO: persistir em OpenSearch + Neo4j + ChromaDB
         processed += 1
 

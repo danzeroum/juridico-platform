@@ -1,19 +1,35 @@
+"""Health check endpoint — público, sem autenticação."""
+from datetime import UTC, datetime
+
 from fastapi import APIRouter
-from datetime import datetime
 
-router = APIRouter()
+router = APIRouter(tags=["infra"])
 
 
-@router.get("/health")
-async def health():
+@router.get(
+    "/health",
+    summary="Health check",
+    response_description="Status do gateway e dependências",
+    responses={
+        200: {
+            "description": "Serviço saudável",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "status": "healthy",
+                        "service": "gateway",
+                        "version": "0.2.0",
+                        "timestamp": "2026-06-16T08:00:00+00:00",
+                    }
+                }
+            },
+        }
+    },
+)
+async def health() -> dict:
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0",
-        "platform": "juridico-platform",
+        "service": "gateway",
+        "version": "0.2.0",
+        "timestamp": datetime.now(UTC).isoformat(),
     }
-
-
-@router.get("/")
-async def root():
-    return {"message": "Juridico Platform API v1.0", "docs": "/docs"}

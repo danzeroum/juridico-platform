@@ -4,8 +4,8 @@ Usado por LegalScore, TaxPredict, PetiBot e ConciliaIA
 """
 
 import hashlib
-from typing import List, Dict, Any
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ class RAGEngine:
     def _get_client(self):
         if self._chroma_client is None:
             import chromadb
+
             from shared.config import settings
             self._chroma_client = chromadb.HttpClient(
                 host=settings.CHROMA_URL.replace("http://", "").split(":")[0],
@@ -30,7 +31,7 @@ class RAGEngine:
             )
         return self._chroma_client
 
-    def upsert_document(self, doc_id: str, content: str, metadata: Dict) -> bool:
+    def upsert_document(self, doc_id: str, content: str, metadata: dict) -> bool:
         """Adiciona documento ao indice vetorial com deduplicacao."""
         content_hash = hashlib.sha256(content.encode()).hexdigest()
 
@@ -47,9 +48,7 @@ class RAGEngine:
                 logger.debug(f"Documento {doc_id} ja indexado, pulando.")
                 return False
 
-        # TODO: gerar embedding via Ollama BGE-M3 na Fase 1
-        embedding = None
-
+        # TODO: gerar embedding via Ollama BGE-M3 na Fase 1 (embedding = None por ora)
         collection.upsert(
             ids=[doc_id],
             documents=[content],
@@ -61,8 +60,8 @@ class RAGEngine:
         self,
         query: str,
         n_results: int = 10,
-        where: Dict | None = None,
-    ) -> List[Dict[str, Any]]:
+        where: dict | None = None,
+    ) -> list[dict[str, Any]]:
         """Busca semantica por similaridade."""
         client = self._get_client()
         collection = client.get_or_create_collection(name=self.collection_name)

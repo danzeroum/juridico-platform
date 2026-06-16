@@ -3,11 +3,13 @@ Conexao com PostgreSQL via SQLAlchemy + PgBouncer.
 SEMPRE conectar via PgBouncer (porta 6432), nunca direto ao PostgreSQL.
 """
 
+import logging
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
 from shared.config import settings
-import logging
 
 logger = logging.getLogger(__name__)
 
