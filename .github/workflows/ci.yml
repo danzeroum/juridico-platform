@@ -50,6 +50,7 @@ jobs:
         run: |
           pytest \
             tests/unit/ \
+            tests/e2e/ \
             services/scoring/tests/contract/ \
             services/shared/alerts/tests/ \
             --cov=services \
