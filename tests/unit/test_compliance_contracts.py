@@ -212,3 +212,30 @@ class TestIbgeTransform:
         bronze = IbgeMunicipioBronze(**ibge_bronze_valido)
         silver = ibge_bronze_to_silver(bronze)
         assert silver.lag_days == -1
+
+
+# ---------------------------------------------------------------------------
+# Branches de erro/fallback não cobertos anteriormente
+# ---------------------------------------------------------------------------
+
+class TestIbgeBranchesFaltantes:
+    def test_cod_ibge_nao_numerico_rejeitado(self, ibge_bronze_valido):
+        ibge_bronze_valido["cod_ibge"] = "ABCDEFG"  # 7 chars, non-digit → validator raises
+        with pytest.raises(ValidationError, match="dígitos"):
+            IbgeMunicipioBronze(**ibge_bronze_valido)
+
+    def test_source_date_formato_invalido_nao_crasha(self, ibge_bronze_valido):
+        """source_date mal-formatado cai no except ValueError → lag_days = -1."""
+        ibge_bronze_valido["source_date"] = "15/03/2024"  # formato DD/MM/YYYY
+        bronze = IbgeMunicipioBronze(**ibge_bronze_valido)
+        silver = ibge_bronze_to_silver(bronze)
+        assert silver.lag_days == -1
+
+
+class TestSnisBranchesFaltantes:
+    def test_source_date_formato_invalido_nao_crasha(self, snis_bronze_valido):
+        """source_date mal-formatado cai no except ValueError → lag_days = -1."""
+        snis_bronze_valido["source_date"] = "01/06/2023"  # formato DD/MM/YYYY
+        bronze = SnisMunicipioBronze(**snis_bronze_valido)
+        silver = snis_bronze_to_silver(bronze)
+        assert silver.lag_days == -1

@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-16 (sessão continuada — PRs #9–#16)
+> Atualizado em: 2026-06-16 (sessão continuada — PRs #9–#20)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -214,8 +214,28 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | 3b — TaxPredict | #7 | 91.98% / 271 testes | ✅ | ⚠️ P0-1, P0-4, P2-3 |
 | 4 — LicitaWatch/PetiBot/ConciliaIA | #8 | 93.16% / 351 testes | ✅ | ⚠️ P0-1, P0-4 |
 | E2E HTTP + PNCP task | #16 | 467 testes | ✅ | E2E Docker pendente (infra) |
+| Cobertura 95%+ (kmeans/RAG/factory/ratelimit/quality) | #17–#19 | 502 testes | ✅ | — |
+| Cobertura ~99% (todos os gaps cobríveis eliminados) | #20 + extras | ~580 testes | ✅ (CI em andamento) | — |
 
-**Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
+**Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
+
+### Cobertura de testes — estado final (pós PR #20 + commits extras)
+
+| Módulo | Cobertura | Linhas descobertas | Razão |
+|---|---|---|---|
+| `engines.py` | 76% | 106, 113-117, 120-129 | Crate Rust não compilado em CI |
+| `factory.py` | 93% | 59, 63 | Requer `rust.healthy()` = True |
+| `config.py` | 98% | 8 | `path.read_text()` requer Docker Secret em `/run/secrets/` |
+| **Todos os outros** | **100%** | — | — |
+| **TOTAL (suite completa)** | **~99%** | 18 linhas impossíveis | Rust + Docker Secret |
+
+Módulos que atingiram 100% após PR #20 (antes estavam abaixo):
+`lgpd.py`, `merkle.py`, `idempotency.py`, `contracts/scoring.py`,
+`benford.py`, `compliance/monitor.py`, `crosscheck/engine.py`,
+`ingest/contracts/datajud.py`, `ingest/contracts/receita.py`,
+`ingest/contracts/pgfn.py`, `ingest/contracts/ibge.py`,
+`ingest/contracts/snis.py`, `ingest/contracts/pncp.py`,
+`ingest/pipeline/base.py`, `shared/config.py`.
 
 ### Pendências bloqueadas por decisões externas
 

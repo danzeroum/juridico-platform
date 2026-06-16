@@ -116,3 +116,14 @@ def test_hmac_key_obrigatoria(monkeypatch):
     with pytest.raises(RuntimeError, match="HMAC_KEY"):
         from services.shared.lgpd import hash_cpf
         hash_cpf("12345678909")
+
+
+def test_rotate_key_reprocess_retorna_registros():
+    """rotate_key_reprocess atualiza a chave global e devolve os registros."""
+    import services.shared.lgpd as lgpd_mod
+    from services.shared.lgpd import rotate_key_reprocess
+    records = [{"id": 1}, {"id": 2}]
+    new_key = "b" * 64
+    result = rotate_key_reprocess(records, new_key)
+    assert result is records
+    assert lgpd_mod._HMAC_KEY == bytes.fromhex(new_key)

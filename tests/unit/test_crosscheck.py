@@ -281,3 +281,32 @@ def test_run_checks_findings_tem_campos_obrigatorios(engine):
         assert hasattr(f, "severity")
         assert hasattr(f, "description")
         assert hasattr(f, "detail")
+
+
+def test_cc05_todos_zeros_valor_erro_ignorado(engine):
+    """Série de 30+ zeros: analyze_benford levanta ValueError → CC05 ignorado."""
+    fin = {"serie_receitas_mensais": [0.0] * 35}  # 35 items, 0 valid first-digits
+    pub = {}
+    findings = engine.run_checks(fin, pub)
+    assert "CC05" not in _rules(findings)
+
+
+def test_cc05_conforme_ignorado(engine):
+    """Série com distribuição Benford conforme: CC05 não dispara (return [] no final)."""
+    # 300 valores com distribuição próxima de Benford (MAD < 0.006)
+    values: list[float] = []
+    counts = {1: 90, 2: 53, 3: 37, 4: 29, 5: 24, 6: 20, 7: 17, 8: 15, 9: 14}
+    for digit, n in counts.items():
+        values.extend([float(f"{digit}000")] * n)
+    fin = {"serie_receitas_mensais": values}
+    pub = {}
+    findings = engine.run_checks(fin, pub)
+    assert "CC05" not in _rules(findings)
+
+
+def test_cc06_serie_sem_validos_suficientes_ignorado(engine):
+    """Série com menos de 2 valores válidos: compute_zscore levanta ValueError → CC06 ignorado."""
+    fin = {"serie_despesas_mensais": [None, None, 0.0]}  # 3 items, nenhum válido p/ zscore
+    pub = {}
+    findings = engine.run_checks(fin, pub)
+    assert "CC06" not in _rules(findings)

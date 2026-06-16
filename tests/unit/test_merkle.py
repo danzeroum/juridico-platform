@@ -110,3 +110,9 @@ def test_len(ledger):
     assert len(ledger) == 1
     ledger.add_entry("r2", "p", {}, {})
     assert len(ledger) == 2
+
+
+def test_merkle_root_ledger_vazio(ledger):
+    """Ledger vazio não deve explodir; retorna hash determinístico da string vazia."""
+    root = ledger.merkle_root
+    assert isinstance(root, str) and len(root) == 64

@@ -252,3 +252,14 @@ class TestQualityTransforms:
         })
         assert silver["esta_ativa"] is False
         assert silver["capital_social"] == 0.0
+
+
+def test_get_circuit_breaker_cria_e_reutiliza():
+    """get_circuit_breaker deve criar na primeira chamada e reutilizar na segunda."""
+    from services.ingest.pipeline.base import _breakers, get_circuit_breaker
+    _breakers.clear()
+    cb1 = get_circuit_breaker("test-source-xyz")
+    cb2 = get_circuit_breaker("test-source-xyz")
+    assert cb1 is cb2
+    assert cb1.name == "test-source-xyz"
+    _breakers.clear()

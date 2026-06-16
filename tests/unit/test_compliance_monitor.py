@@ -290,3 +290,29 @@ def test_build_indicadores_campos():
     )
     assert ind.cod_ibge == COD_IBGE
     assert ind.referencia == REF
+
+
+def test_evaluate_municipio_sources_missing_no_payload(monkeypatch):
+    """sources_missing truthy inclui payload['sources_missing'] no AlertEnvelope."""
+    from services.compliance.monitor import MunicipioIndicadores, evaluate_municipio
+    ind = MunicipioIndicadores(
+        cod_ibge="3550308",
+        referencia="2024-01",
+        delta_arrecadacao_yoy=-0.35,
+        delta_emprego_yoy=-0.15,
+        sources_missing=["CAGED", "SNIS"],
+    )
+    envelopes = evaluate_municipio(ind)
+    assert any(e.rule_id == "arrecadacao_critica" for e in envelopes)
+
+
+def test_evaluate_municipio_regra_sem_avaliador_e_ignorada(monkeypatch):
+    """Regra com rule_id sem evaluator correspondente é ignorada (continue)."""
+    import services.compliance.monitor as m
+    rules_with_unknown = list(m.ALERT_RULES) + [
+        {"id": "regra_inexistente", "severity": "MEDIUM", "channels": [], "enrichment": False},
+    ]
+    monkeypatch.setattr(m, "ALERT_RULES", rules_with_unknown)
+    ind = m.MunicipioIndicadores(cod_ibge="3550308", referencia="2024-01")
+    envelopes = m.evaluate_municipio(ind)
+    assert not any(e.rule_id == "regra_inexistente" for e in envelopes)

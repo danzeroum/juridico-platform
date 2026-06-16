@@ -120,3 +120,11 @@ class TestPncpTransform:
         b = PncpContratoBronze(**bronze_valido)
         s = pncp_bronze_to_silver(b)
         assert s.is_unico_proponente is False
+
+    def test_prazo_none_com_data_invalida(self, bronze_valido):
+        """Datas mal-formatadas caem no except ValueError → prazo_dias=None."""
+        bronze_valido["data_publicacao"] = "01/03/2023"  # formato errado
+        bronze_valido["data_abertura"] = "15/03/2023"    # formato errado
+        b = PncpContratoBronze(**bronze_valido)
+        s = pncp_bronze_to_silver(b)
+        assert s.prazo_abertura_dias is None

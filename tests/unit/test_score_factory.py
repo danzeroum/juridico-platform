@@ -171,3 +171,18 @@ def test_fallback_engine_score_falls_back_on_unavailable():
     req = ScoreRequest(cnpj="12345678000195", cnae_2dig="62", features={})
     result = fb.score(req)
     assert result.score == 777
+
+
+def test_score_result_confidence_interval_invalido():
+    """lower > upper deve levantar ValueError."""
+    from pydantic import ValidationError
+
+    from services.shared.contracts.scoring import ScoreResult
+    with pytest.raises(ValidationError, match="invalido"):
+        ScoreResult(
+            score=700,
+            confidence_interval=(800, 700),  # lo > hi — inválido
+            risk_level="BAIXO",
+            engine="python",
+            breakdown={},
+        )
