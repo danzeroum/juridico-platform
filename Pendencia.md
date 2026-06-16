@@ -13,12 +13,12 @@
 
 | Fase | Código merged / CI verde | DoD verde (pronto) |
 |---|---|---|
-| 0 — Segurança/Infra | ✅ PRs #3,#9–#15 | ⚠️ P0-2 (restore não testado), P0-4: MinIO+E2E+Prometheus pendentes |
-| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4: MinIO+E2E+Prometheus pendentes |
-| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4: MinIO+E2E+Prometheus |
-| 3a — ComplianceRadar | ✅ PRs #6,#13 | ⚠️ P0-1, P0-4: MinIO+E2E+Prometheus |
-| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4: MinIO+E2E+Prometheus, validação modelo |
-| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4: MinIO+E2E+Prometheus |
+| 0 — Segurança/Infra | ✅ PRs #3,#9–#15 | ⚠️ P0-2 (restore não testado), P0-4: MinIO anon + E2E Docker pendentes |
+| 1 — LegalScore PJ | ✅ PR #4 | ⚠️ P0-1 (SLA não medido validamente), P0-4: MinIO anon + E2E Docker |
+| 2 — ContabilIA | ✅ PR #5 | ⚠️ P0-1, P0-4: MinIO anon + E2E Docker |
+| 3a — ComplianceRadar | ✅ PRs #6,#13 | ⚠️ P0-1, P0-4: MinIO anon + E2E Docker |
+| 3b — TaxPredict | ✅ PR #7 | ⚠️ P0-1, P0-4: MinIO anon + E2E Docker, validação modelo |
+| 4 — LicitaWatch/PetiBot/ConciliaIA | ✅ PR #8 | ⚠️ P0-1, P0-4: MinIO anon + E2E Docker |
 
 ---
 
@@ -55,7 +55,7 @@
 - [x] Audit trail de acesso a dados pessoais — ✅ PR #14 (`audit_log.py`, `test_audit_log.py`, wired em decrypt/erase/ledger.write)
 - [ ] E2E por produto com Docker real; contrato por fronteira SEAMS (requer infra)
 - [x] OTel span em **todas** as fronteiras — ✅ PR #15 (legalscore, taxpredict, petibot, concilia, compliance, contabilia, licitawatch)
-- [ ] Métricas Prometheus por produto (requer Prometheus configurado — infra)
+- [x] Métricas Prometheus em todas as fronteiras — ✅ `prometheus_fastapi_instrumentator` em `main.py` (PR #3), expõe `/metrics`; auto-instrumenta todos os routers (request count, duration, status codes por endpoint)
 - [x] Playbook de incidentes por produto — ✅ PR #14 (`docs/INCIDENT-PLAYBOOK.md`)  
 **Aceite:** cada checkbox com teste nomeado correspondente verde no CI.
 
