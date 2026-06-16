@@ -94,25 +94,58 @@
 - CI 5 jobs verdes ✅
 - API-GUIDELINES.md + ROPA.md ✅
 
-### Fase 1 🔄 EM ANDAMENTO (PR #4 — aguardando CI)
+### Fase 1 ✅ CONCLUÍDA (merged PR #4)
 - **1a**: data contracts DATAJUD/PGFN/Receita, pipeline bronze→silver, CircuitBreaker ✅
 - **1b**: FeatureAssembler, PythonScoreEngine via SEAMS, Decision Ledger ✅
 - **1c**: batch endpoint HTTP 202, Redis idempotency 24h, Celery run_batch_score ✅
 - **1d**: validation.py (AUC/Brier), model-metrics endpoint, locust load test ✅
 - Coverage: 85% (118 testes) ✅
 
-### Fase 2 🔜 PRÓXIMA (ContabilIA)
-- Pré-requisito: PR #4 merged
-- Corrigir AnomalyDetector (fit() antes de detect(), fallback logic)
-- Ingest CAGED, SICONFI
-- Cross-check Benford + Z-score
-- API upload DRE
+### Fase 2 ✅ CONCLUÍDA (merged PR #5)
+- AnomalyDetector corrigido (fit/detect separados, fallback com threshold correto) ✅
+- data contracts CAGED e SICONFI (Bronze/Silver + transform) ✅
+- Ingest tasks CAGED e SICONFI com CircuitBreaker + cache Redis ✅
+- Benford analysis module (MAD, status CONFORME/MARGINAL/SUSPEITO) ✅
+- Z-score outlier detection (threshold 3σ) ✅
+- CrossCheckEngine CC01–CC08 (headcount, receita, contratos, estoque, Benford, Z-score, liquidez, EBITDA) ✅
+- ContabilIA router: POST /audit/upload (CSV→relatório JSON síncrono), GET /audit/{id} ✅
+- Coverage: 91.5% (221 testes) ✅
+
+### Fase 3a 🔄 EM ANDAMENTO (ComplianceRadar — aguardando CI)
+- data contracts SNIS (saneamento) e IBGE (indicadores municipais) ✅
+- ComplianceRadar monitor: avalia regras arrecadacao_critica e saneamento_baixo ✅
+- AlertEnvelopes gerados via SEAMS contracts/alerts.py ✅
+- Compliance router: municipalities, municipality detail, alerts, evaluate ✅
+- DATASUS EXCLUÍDO — aguarda PD-06 (parecer DPO) ✅
+- Coverage: 91.9% (261 testes) ✅
+
+### Fase 3b 🔜 PRÓXIMA (TaxPredict)
+- Pré-requisito: PR #6 merged
+- PyMC5 com set_data/MutableData (substituir PyMC3)
+- MCMC apenas em treino/recalibração (Celery Beat), não no path da request
+- predict() condiciona no caso com RAG (ChromaDB + BGE-M3)
+- Validar com desfechos reais
 
 ---
 
 ## QUESTÕES TÉCNICAS PARA FASE 2
 
-### QT-04 — AnomalyDetector precisa de correção antes da Fase 2
-**Status:** Identificado no ROADMAP como pré-requisito  
-**Contexto:** `services/audit/anomaly/detector.py` chama `decision_function()` antes de `fit()`; fallback compara escalar com percentil de si mesmo.  
-**Ação:** Corrigir na Fase 2 antes de usar em ContabilIA.
+### QT-04 — AnomalyDetector ✅ CORRIGIDO (Fase 2)
+**Status:** Corrigido em `services/audit/anomaly/detector.py`  
+- `fit()` e `detect()` separados; `RuntimeError` se `detect()` chamado sem `fit()` prévio  
+- Fallback MiniBatchKMeans: threshold calculado na distribuição de treino em `fit()`, não em cada `detect()`  
+- 7 testes passando, cobertura 85%
+
+---
+
+## QUESTÕES TÉCNICAS PARA FASE 3
+
+### QT-05 — DATASUS bloqueado (PD-06) nas Fases 3a e 4
+**Status:** Bloqueado aguardando parecer DPO  
+**Impacto:** ComplianceRadar (CC03-SNIS ok; DATASUS excluído) e DanoBot (Fase 4) não podem usar dados de saúde  
+**Ação:** Contratar DPO antes da Fase 3b (ou 4 se DanoBot for prioritário)
+
+### QT-06 — PyMC3 → PyMC5 para TaxPredict
+**Status:** Pendente (Fase 3b)  
+**Contexto:** `services/taxpredict/model/bayesian.py` usa API PyMC3 obsoleta; `predict()` ignora input; MCMC no path da request  
+**Ação:** Migrar para PyMC5 com `pm.set_data`/`MutableData`; MCMC em Celery Beat
