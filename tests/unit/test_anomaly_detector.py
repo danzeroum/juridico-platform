@@ -75,3 +75,14 @@ def test_threshold_calculado_no_fit(detector, X_normal):
     assert detector._fallback_threshold is not None
     assert isinstance(detector._fallback_threshold, float)
     assert detector._fallback_threshold > 0
+
+
+def test_kmeans_fallback_quando_iso_forest_falha(detector, X_normal, monkeypatch):
+    """Quando isolation_forest falha, o fallback KMeans deve ser usado."""
+    detector.fit(X_normal)
+    monkeypatch.setattr(detector.iso_forest, "decision_function", lambda x: (_ for _ in ()).throw(RuntimeError("simulado")))
+    x = X_normal[0]
+    result = detector.detect(x)
+    assert result["method"] == "kmeans_fallback"
+    assert "anomaly_score" in result
+    assert isinstance(result["is_anomaly"], bool)
