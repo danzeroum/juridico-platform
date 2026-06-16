@@ -14,6 +14,7 @@ import requests
 from celery.utils.log import get_task_logger
 from ingest.celery_app import app
 from pydantic import ValidationError
+
 from services.ingest.contracts.siconfi import (
     SiconfiContaBronze,
     siconfi_bronze_to_silver,
