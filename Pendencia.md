@@ -128,7 +128,7 @@
 - `services/shared/config.py`: MINIO_URL, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, OLLAMA_URL ✅
 - Coverage: 91.98% (271 testes) ✅
 
-### Fase 4 🔄 EM ANDAMENTO (LicitaWatch, PetiBot, ConciliaIA, DanoBot placeholder)
+### Fase 4 ✅ CONCLUÍDA (merged PR #8)
 - `services/ingest/contracts/pncp.py`: Modalidade enum, PncpContratoBronze, PncpContratoSilver, pncp_bronze_to_silver() ✅
 - `services/shared/contracts/petibot.py`: TipoAcao, PetiRequest, PetiSection, PetiResponse, SECOES_MINIMAS_POR_TIPO ✅
 - `services/shared/contracts/concilia.py`: ConciliaRequest, ConciliaFator, ConciliaResponse ✅
@@ -139,8 +139,30 @@
 - `services/gateway/routers/petibot.py`: POST /petibot/assemble ✅
 - `services/gateway/routers/danobot.py`: POST /danobot/predict → 501 (PD-06 bloqueado) ✅
 - `services/gateway/routers/concilia.py`: POST /concilia/recommend ✅
-- `services/gateway/main.py`: todos os routers registrados ✅
-- 80 novos testes (160 total Fase 4); coverage: 93.16% (351 testes) ✅
+- `services/gateway/main.py`: todos os 7 routers registrados ✅
+- 80 novos testes; coverage total: 93.16% (351 testes) ✅
+
+---
+
+## ROADMAP COMPLETO — RESUMO FINAL (2026-06-16)
+
+Todas as fases do roadmap estão implementadas e mergeadas no main.
+
+| Fase | Status | PR | Coverage |
+|---|---|---|---|
+| Fase 0 (Segurança + Infra) | ✅ merged | #3 | — |
+| Fase 1 (LegalScore PJ) | ✅ merged | #4 | 85% / 118 testes |
+| Fase 2 (ContabilIA) | ✅ merged | #5 | 91.5% / 221 testes |
+| Fase 3a (ComplianceRadar) | ✅ merged | #6 | 91.9% / 261 testes |
+| Fase 3b (TaxPredict) | ✅ merged | #7 | 91.98% / 271 testes |
+| Fase 4 (LicitaWatch/PetiBot/ConciliaIA) | ✅ merged | #8 | 93.16% / 351 testes |
+
+### Pendências remanescentes bloqueadas por decisões externas
+
+1. **DanoBot** — implementação completa bloqueada por **PD-06** (DATASUS = dado sensível LGPD art. 11). Atualmente retorna 501. Desbloqueia com parecer DPO.
+2. **K8s migration** — condicional a gatilhos medidos (p95 > 2s p/ 1k CNPJs → Rust; >70% CPU sustentado → K8s). Nenhum gatilho atingido ainda.
+3. **PNCP ingest task** (Celery) — contrato pncp.py criado; tarefa de ingestão agendada não implementada. Baixa prioridade — pode ser feita em sprint separado.
+4. **PD-01** Neo4j licença, **PD-02** domínio TLS, **PD-03** IdP JWT, **PD-04** backup restore testado, **PD-05** KMS real — ver seções acima.
 
 ---
 
