@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-16 (sessão final — PR #20 merged; roadmap completo)
+> Atualizado em: 2026-06-17 (PR #21 merged — Fase 1c: PostgresDecisionLedger + RLS ligada no router)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -106,6 +106,14 @@
 
 ---
 
+### PD-07 — DATABASE_URL deve usar credenciais de app_user (não postgres)
+**Status:** Pendente de configuração de deploy  
+**Contexto:** `PostgresDecisionLedger` (PR #21) usa `tenant_transaction` que aplica `SET LOCAL app.tenant_id` e RLS. Se `DATABASE_URL` apontar para o usuário `postgres` (superusuário), o PostgreSQL bypassa `FORCE ROW LEVEL SECURITY` silenciosamente — a RLS fica sem efeito, abrindo risco de vazamento entre tenants.  
+**Ação necessária antes do go-live:** Configurar `DATABASE_URL=postgresql://app_user:senha@host:5432/db` — o role `app_user` (NOSUPERUSER) está definido em `bootstrap-db.sql` com grants mínimos. Em Docker Compose: `DATABASE_URL` deve referenciar Docker Secret para a senha.  
+**Aceite:** `SHOW CURRENT_USER` retorna `app_user`; não retorna `postgres` ou `superuser`.
+
+---
+
 ### PD-06 — Validação ROPA com DPO/advogado
 **Status:** `docs/ROPA.md` criado com classificação das 14 fontes.  
 **Bloqueio crítico (LGPD):** O uso de DATASUS/SIH (dado de saúde = sensível, art. 11) na ComplianceRadar e DanoBot precisa de parecer jurídico. A base legal defensável é uso agregado/anonimizado (art. 12), mas requer:
@@ -123,6 +131,13 @@
 
 ### QT-02 — Neo4j Community sem backup a quente
 **Status:** Anotado. Backup manual via `neo4j-admin dump` funciona, mas exige parar o serviço (ou usar snapshot de volume). Impacto: janela de manutenção para backup até decisão PD-01.
+
+### QT-07 — tenant.idempotency_keys é código morto
+**Status:** Identificado no review (PR #21)  
+**Contexto:** A tabela `tenant.idempotency_keys` existe em `bootstrap-db.sql`, mas o caminho real de idempotência usa Redis (`services/shared/idempotency.py`) — não o Postgres. A tabela nunca é lida nem escrita em produção. Políticas RLS criadas para ela em `bootstrap-db.sql` também são mortas.  
+**Ação sugerida (não bloqueante):** Remover a tabela e suas políticas do `bootstrap-db.sql` numa limpeza futura. Ou manter como fallback explicitamente documentado. Decisão a critério do dono.
+
+---
 
 ### QT-03 — OpenSearch vs Elasticsearch
 **Status:** O compose inclui OpenSearch 2.12. O código do produto ainda não o usa diretamente (será usado por PetiBot e DanoBot na Fase 4). Sem bloqueio atual.
@@ -216,6 +231,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | E2E HTTP + PNCP task | #16 | 467 testes | ✅ | E2E Docker pendente (infra) |
 | Cobertura 95%+ (kmeans/RAG/factory/ratelimit/quality) | #17–#19 | 502 testes | ✅ | — |
 | Cobertura ~99% (todos os gaps cobríveis eliminados) | #20 | 528 testes | ✅ merged (ecea0b4) | — |
+| Fase 1c: PostgresDecisionLedger + RLS wired no router | #21 | 540+ testes | ✅ merged | ⚠️ PD-07 |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
