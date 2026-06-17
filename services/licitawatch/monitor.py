@@ -64,9 +64,11 @@ def evaluate_licitacoes(ind: LicitacaoIndicadores) -> list[AlertEnvelope]:
 
         severity = _SEVERITY_MAP.get(rule["severity"], Severity.MEDIUM)
         dedup_key = f"{rule['id']}:{ind.cnpj_orgao}:{ind.referencia}"
+        # Determinístico: mesmo (rule, órgão, referência) → mesmo alert_id.
+        alert_id = str(uuid.uuid5(uuid.NAMESPACE_OID, dedup_key))
 
         envelopes.append(AlertEnvelope(
-            alert_id=str(uuid.uuid4()),
+            alert_id=alert_id,
             dedup_key=dedup_key,
             rule_id=rule["id"],
             severity=severity,

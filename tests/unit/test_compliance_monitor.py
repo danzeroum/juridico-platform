@@ -316,3 +316,41 @@ def test_evaluate_municipio_regra_sem_avaliador_e_ignorada(monkeypatch):
     ind = m.MunicipioIndicadores(cod_ibge="3550308", referencia="2024-01")
     envelopes = m.evaluate_municipio(ind)
     assert not any(e.rule_id == "regra_inexistente" for e in envelopes)
+
+
+# ---------------------------------------------------------------------------
+# Deduplicação por alert_id determinístico
+# ---------------------------------------------------------------------------
+
+def test_alert_id_deterministico_mesmo_municipio_referencia():
+    """
+    Duas avaliações do mesmo (município, referência) produzem o mesmo alert_id.
+    ON CONFLICT (alert_id) DO NOTHING garante dedup sem worker extra.
+    """
+    ind = MunicipioIndicadores(
+        cod_ibge=COD_IBGE,
+        referencia=REF,
+        delta_arrecadacao_yoy=-0.25,
+        delta_emprego_yoy=-0.15,
+    )
+    env1 = evaluate_municipio(ind)
+    env2 = evaluate_municipio(ind)
+    ids1 = {e.rule_id: e.alert_id for e in env1}
+    ids2 = {e.rule_id: e.alert_id for e in env2}
+    assert ids1 == ids2, "alert_id deve ser determinístico para o mesmo (regra, município, referência)"
+
+
+def test_alert_id_diferente_para_referencia_diferente():
+    """Período diferente → alert_id diferente (re-alertar é esperado)."""
+    ind_jun = MunicipioIndicadores(
+        cod_ibge=COD_IBGE, referencia="2024-06",
+        delta_arrecadacao_yoy=-0.25, delta_emprego_yoy=-0.15,
+    )
+    ind_jul = MunicipioIndicadores(
+        cod_ibge=COD_IBGE, referencia="2024-07",
+        delta_arrecadacao_yoy=-0.25, delta_emprego_yoy=-0.15,
+    )
+    env_jun = {e.rule_id: e.alert_id for e in evaluate_municipio(ind_jun)}
+    env_jul = {e.rule_id: e.alert_id for e in evaluate_municipio(ind_jul)}
+    for rule_id in env_jun:
+        assert env_jun[rule_id] != env_jul[rule_id]

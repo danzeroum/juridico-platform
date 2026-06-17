@@ -100,8 +100,10 @@ def evaluate_municipio(ind: MunicipioIndicadores) -> list[AlertEnvelope]:
         if not evaluator(ind):
             continue
 
-        alert_id = str(uuid.uuid4())
         dedup_key = f"{rule_id}:{ind.cod_ibge}:{ind.referencia}"
+        # Determinístico: mesmo (rule, município, referência) → mesmo alert_id.
+        # ON CONFLICT (alert_id) DO NOTHING garante idempotência sem worker extra.
+        alert_id = str(uuid.uuid5(uuid.NAMESPACE_OID, dedup_key))
 
         payload: dict[str, Any] = {
             "cod_ibge": ind.cod_ibge,

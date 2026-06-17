@@ -155,6 +155,35 @@ def test_nenhuma_regra_dados_saudaveis():
     assert envelopes == []
 
 
+# ---------------------------------------------------------------------------
+# Deduplicação por alert_id determinístico
+# ---------------------------------------------------------------------------
+
+def test_alert_id_deterministico_mesmo_orgao_referencia():
+    """
+    Duas avaliações do mesmo (órgão, referência) produzem o mesmo alert_id.
+    ON CONFLICT (alert_id) DO NOTHING garante dedup sem worker extra.
+    """
+    contratos = [_make_silver(numero=str(i), cnpj_fornecedor="11111111000111") for i in range(8)]
+    contratos += [_make_silver(numero=str(i + 8), cnpj_fornecedor="22222222000122") for i in range(2)]
+    ind = build_indicadores_from_silver(CNPJ, REF, contratos)
+    env1 = {e.rule_id: e.alert_id for e in evaluate_licitacoes(ind)}
+    env2 = {e.rule_id: e.alert_id for e in evaluate_licitacoes(ind)}
+    assert env1 == env2, "alert_id deve ser determinístico para o mesmo (regra, órgão, referência)"
+
+
+def test_alert_id_diferente_para_referencia_diferente():
+    """Ano diferente → alert_id diferente (re-alertar em novo período é esperado)."""
+    contratos = [_make_silver(numero=str(i), cnpj_fornecedor="11111111000111") for i in range(8)]
+    contratos += [_make_silver(numero=str(i + 8), cnpj_fornecedor="22222222000122") for i in range(2)]
+    ind_2023 = build_indicadores_from_silver(CNPJ, "2023", contratos)
+    ind_2024 = build_indicadores_from_silver(CNPJ, "2024", contratos)
+    env_2023 = {e.rule_id: e.alert_id for e in evaluate_licitacoes(ind_2023)}
+    env_2024 = {e.rule_id: e.alert_id for e in evaluate_licitacoes(ind_2024)}
+    for rule_id in env_2023:
+        assert env_2023[rule_id] != env_2024[rule_id]
+
+
 def test_dedup_key_formato():
     ind = LicitacaoIndicadores(
         cnpj_orgao=CNPJ, referencia=REF,
