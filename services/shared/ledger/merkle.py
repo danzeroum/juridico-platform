@@ -149,14 +149,24 @@ class DecisionLedger:
         return len(self._entries)
 
 
+# Frequência de checkpoints Merkle em ledger.anchors.
+# Não reduz O(N) do recálculo atual (requer migração para MMR — ver Pendencia.md QT-08);
+# fornece marcos de auditoria histórica verificáveis sem replay total.
+_ANCHOR_INTERVAL = 1024
+
+
 class PostgresDecisionLedger:
     """
     Decision Ledger com backend Postgres (Fase 1c).
 
     Usa tenant_transaction() para todas as operações; a RLS do Postgres enforça
     isolamento de tenant. O Merkle tree é por tenant: entradas ordenadas por
-    entry_index, raiz recalculada a cada INSERT (O(N) em leaf_hashes — para N >
-    10k, usar âncoras periódicas na tabela ledger.anchors).
+    entry_index, raiz recalculada a cada INSERT.
+
+    Custo atual: O(N) por inserção (lê todos os leaf_hashes do tenant).
+    Mitigation: advisory lock serializa escritas por tenant (evita bifurcação
+    da cadeia Merkle); checkpoint a cada _ANCHOR_INTERVAL entradas (auditoria
+    histórica). Migração para O(log N) requer MMR — ver Pendencia.md QT-08.
 
     A aplicação DEVE conectar como role não-superusuário (app_user definido em
     bootstrap-db.sql). No PostgreSQL, superusuários bypassam FORCE ROW LEVEL
@@ -181,6 +191,15 @@ class PostgresDecisionLedger:
         from services.shared.tenant_db import tenant_transaction
 
         with tenant_transaction(self._tenant_id) as conn:
+            # Serializa escritas por tenant dentro da transação.
+            # pg_advisory_xact_lock libera automaticamente no COMMIT/ROLLBACK.
+            # Previne que dois requests concorrentes do mesmo tenant leiam o
+            # mesmo COUNT(*) e insiram entry_index duplicado (bifurcação Merkle).
+            conn.execute(
+                sa_text("SELECT pg_advisory_xact_lock(hashtext(:tid)::bigint)"),
+                {"tid": self._tenant_id},
+            )
+
             entry_index = int(
                 conn.execute(sa_text("SELECT COUNT(*) FROM ledger.entries")).scalar() or 0
             )
@@ -232,6 +251,18 @@ class PostgresDecisionLedger:
                     "merkle_root": new_root,
                 },
             )
+
+            # Checkpoint periódico: salva raiz Merkle verificável em ledger.anchors.
+            # Permite auditoria histórica sem replay total. Não reduz O(N) deste método.
+            new_count = entry_index + 1
+            if new_count % _ANCHOR_INTERVAL == 0:
+                conn.execute(
+                    sa_text(
+                        "INSERT INTO ledger.anchors (anchor_at_index, merkle_root, tenant_id)"
+                        " VALUES (:idx, :root, :tenant_id::uuid)"
+                    ),
+                    {"idx": entry_index, "root": new_root, "tenant_id": self._tenant_id},
+                )
 
         return {**entry, "leaf_hash": leaf_hash, "merkle_root": new_root}
 
