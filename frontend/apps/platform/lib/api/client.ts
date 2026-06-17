@@ -1,4 +1,4 @@
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? 'http://localhost:8000'
+const GATEWAY_URL = process.env.GATEWAY_URL ?? 'http://localhost:8000'
 
 export class ApiError extends Error {
   constructor(

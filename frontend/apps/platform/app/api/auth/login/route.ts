@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? 'http://localhost:8000'
+const GATEWAY_URL = process.env.GATEWAY_URL ?? 'http://localhost:8000'
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))

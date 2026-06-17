@@ -82,7 +82,6 @@ export default function ComplianceRadarPage() {
                 {UF_DATA.map((d) => (
                   <button
                     key={d.uf}
-                    role="group"
                     aria-label={`${d.uf}: ${d.severity}`}
                     onClick={() => setSelectedUf(d.uf)}
                     className="h-10 rounded-[6px] flex items-center justify-center text-white text-[10px] font-bold transition-transform hover:scale-110"

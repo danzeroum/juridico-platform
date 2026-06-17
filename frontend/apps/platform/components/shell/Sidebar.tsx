@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
 import { LogOut, ChevronDown } from 'lucide-react'
@@ -34,7 +34,13 @@ const PRODUTOS_NAV: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { tenant, role } = useShell()
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    router.push('/login')
+  }
 
   const configItem: NavItem = { code: 'CG', label: 'Configurações', href: '/configuracoes' }
 
@@ -93,6 +99,7 @@ export function Sidebar() {
             <p className="text-[10px] font-mono capitalize" style={{ color: '#9fb0c5' }}>{role}</p>
           </div>
           <button
+            onClick={handleLogout}
             aria-label="Sair"
             className="text-[#9fb0c5] hover:text-white transition-colors"
           >

@@ -65,7 +65,7 @@ export default function LegalScorePage() {
         risk_level: (simulateDegraded ? 'MODERADO' : 'MODERADO') as const,
         confidence_interval: simulateDegraded ? [460, 590] : [610, 689] as [number, number],
         breakdown: MOCK_BREAKDOWN,
-        engine: 'rust' as const,
+        engine: 'python' as const,
         request_id: 'req_demo_001',
         lag_days: 4,
         source_date: '2026-06-13',

@@ -8,6 +8,16 @@ import {
 import { useShell } from '@/app/context/shell'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell } from 'recharts'
 
+interface JurisprudenciaHit {
+  doc_id: string
+  similarity: number
+  tribunal: string
+  ano: number
+  decisao: 'FAVORAVEL' | 'PARCIAL' | 'DESFAVORAVEL' | 'DESCONHECIDO'
+  ementa: string
+  source_url?: string  // URL canônica retornada pelo backend; fallback via doc_id
+}
+
 const MATERIAS = ['PIS_COFINS', 'IRPJ', 'CSLL', 'ICMS', 'IPI', 'ISS', 'SIMPLES']
 
 const MOCK_RESULT = {
@@ -24,10 +34,10 @@ const MOCK_RESULT = {
     { name: 'Ano de autuação', impact: -0.03, label: '2021 → tendência desfavorável → −3%' },
   ],
   jurisprudencias: [
-    { doc_id: 'TRF3-2023-001', similarity: 0.89, tribunal: 'TRF-3', ano: 2023, decisao: 'FAVORAVEL', ementa: 'Exclusão do ICMS da base de cálculo do PIS/COFINS…' },
-    { doc_id: 'CARF-2022-087', similarity: 0.76, tribunal: 'CARF', ano: 2022, decisao: 'PARCIAL', ementa: 'Aproveitamento de créditos não-cumulativos…' },
-    { doc_id: 'STJ-2021-334', similarity: 0.71, tribunal: 'STJ', ano: 2021, decisao: 'FAVORAVEL', ementa: 'Tese do século — RE 574.706/PR…' },
-  ],
+    { doc_id: 'TRF3-2023-001', similarity: 0.89, tribunal: 'TRF-3', ano: 2023, decisao: 'FAVORAVEL' as const, ementa: 'Exclusão do ICMS da base de cálculo do PIS/COFINS…', source_url: 'https://jurisprudencia.trf3.jus.br/juri/detalhe?uniforme=TRF3-2023-001' },
+    { doc_id: 'CARF-2022-087', similarity: 0.76, tribunal: 'CARF', ano: 2022, decisao: 'PARCIAL' as const, ementa: 'Aproveitamento de créditos não-cumulativos…', source_url: 'https://carf.fazenda.gov.br/sincon/public/pages/ConsultarJurisprudencia/listarJurisprudenciaCarf.jsf?numeroAcordao=CARF-2022-087' },
+    { doc_id: 'STJ-2021-334', similarity: 0.71, tribunal: 'STJ', ano: 2021, decisao: 'FAVORAVEL' as const, ementa: 'Tese do século — RE 574.706/PR…', source_url: 'https://processo.stj.jus.br/processo/pesquisa/?tipoPesquisa=tipoPesquisaNumeroRegistro&termo=STJ-2021-334' },
+  ] satisfies JurisprudenciaHit[],
 }
 
 function DecisaoChip({ decisao }: { decisao: string }) {
@@ -152,7 +162,7 @@ export default function TaxPredictPage() {
                     <div className="flex items-center gap-2 mb-1">
                       <VerifiableCitationChip
                         docId={j.doc_id}
-                        href={`https://www.cnj.jus.br/datajud/${j.doc_id}`}
+                        href={j.source_url ?? `https://www.cnj.jus.br/pesquisa-jurisprudencia/resultado/?corpo=${j.doc_id}`}
                         label={`${j.tribunal} · ${j.ano}`}
                         similarity={j.similarity}
                       />

@@ -14,8 +14,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      # Lido em runtime pelo API route /api/auth/login (server-side only)
-      NEXT_PUBLIC_GATEWAY_URL: http://gateway:8000
+      GATEWAY_URL: http://gateway:8000
     networks:
       - juridico-net
     healthcheck:
@@ -31,11 +30,8 @@ services:
       - "traefik.http.routers.platform.entrypoints=websecure"
       - "traefik.http.routers.platform.tls.certresolver=letsencrypt"
       - "traefik.http.services.platform.loadbalancer.server.port=3000"
-      # Rota HTTP → redireciona para HTTPS (já tratado pelo traefik global,
-      # mas router explícito garante o bind correto no entrypoint web)
-      - "traefik.http.routers.platform-http.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.platform-http.entrypoints=web"
-      - "traefik.http.routers.platform-http.middlewares=redirect-to-https"
+      # HTTP→HTTPS é tratado globalmente pelo entrypoint web no traefik.yml
+      # (--entrypoints.web.http.redirections.entrypoint.to=websecure)
     deploy:
       resources:
         limits:

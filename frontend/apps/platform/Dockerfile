@@ -8,13 +8,13 @@ FROM node:20-alpine AS deps
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 WORKDIR /app
 
-# Copy workspace manifests for layer caching (source not needed yet)
-COPY pnpm-workspace.yaml package.json .npmrc ./
+# Copy workspace manifests + lockfile for layer caching (source not needed yet)
+COPY pnpm-workspace.yaml package.json .npmrc pnpm-lock.yaml ./
 COPY packages/tokens/package.json ./packages/tokens/
 COPY packages/ui/package.json     ./packages/ui/
 COPY apps/platform/package.json   ./apps/platform/
 
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # ── Stage 2: build Next.js standalone bundle ──────────────────────────────────
 FROM node:20-alpine AS builder
