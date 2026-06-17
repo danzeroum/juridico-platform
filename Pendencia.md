@@ -157,8 +157,9 @@
 ### QT-10 — Deduplicação de alertas quebrada pelo fix do índice parcial ✅ CORRIGIDO
 **Status:** Corrigido (commit após PR #25)  
 **Problema:** O fix do `ux_outbox_dedup_window` (índice parcial com `NOW()` — proibido em PostgreSQL) trocou um índice ÚNICO por um não-único, e o comentário afirmava que "a janela de 24h é enforçada em código", mas o código não fazia esse controle. `alert_id = uuid4()` → UUID aleatório → `ON CONFLICT (alert_id) DO NOTHING` nunca ativava.  
-**Correção:** `alert_id = str(uuid.uuid5(uuid.NAMESPACE_OID, dedup_key))` em `compliance/monitor.py` e `licitawatch/monitor.py`. Mesmo (regra, identificador, referência) → mesmo `alert_id` → o `ON CONFLICT` é efetivo. Dedup por período (não janela móvel, o que é mais correto para relatórios governamentais). `publishers.py` e docstrings corrigidos.  
-**Testes:** 4 novos testes em `test_compliance_monitor.py` e `test_licitawatch_monitor.py` (determinístico × mesmo período; diferente × período diferente). 41 testes passando.
+**Correção:** `alert_id = str(uuid.uuid5(uuid.NAMESPACE_OID, dedup_key))` em `compliance/monitor.py` e `licitawatch/monitor.py`. Mesmo (regra, identificador, referência) → mesmo `alert_id` → o `ON CONFLICT` é efetivo. Dedup por período (não janela móvel, o que é mais correto para relatórios governamentais). `publishers.py` e `docs/publishers.py` sincronizados.  
+**Testes:** 4 novos testes em `test_compliance_monitor.py` e `test_licitawatch_monitor.py` (determinístico × mesmo período; diferente × período diferente). 41 testes passando.  
+**⚠️ Retenção da outbox:** O dedup é durável apenas enquanto a linha existir na `alerts_outbox`. Se um job de limpeza podar linhas entregues (`status=done`) dentro da janela do período de referência, o `alert_id` pode ser reinserido → alerta duplicado para o mesmo período. Regra: **não podar linhas da outbox dentro do período de referência vigente**, ou manter tabela-tombstone de `alert_ids` entregues antes de implementar a poda.
 
 ---
 
@@ -264,6 +265,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | Fase 1c: PostgresDecisionLedger + RLS wired no router | #21 | 540+ testes | ✅ merged | ⚠️ PD-07 |
 | Serialização + constraint + anchors + DATABASE_URL app_user | #22 | 14 testes ledger | ✅ merged | ⚠️ QT-08 |
 | PgBouncer multi-user + CI integration job + QT-09 | #24 | + integration job CI | ✅ merged | ⚠️ QT-08 |
+| fix(alerts): alert_id uuid5 — dedup restaurada (QT-10) | #26 | 41 testes | ✅ merged | — |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
