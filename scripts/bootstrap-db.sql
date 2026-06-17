@@ -133,11 +133,11 @@ CREATE TABLE IF NOT EXISTS public.alerts_outbox (
 
 CREATE INDEX IF NOT EXISTS ix_outbox_dispatch ON public.alerts_outbox (status, available_at);
 
--- Cooldown de 24h: dedup_key único dentro da janela (evita alertas duplicados)
-DROP INDEX IF EXISTS ux_outbox_dedup_window;
-CREATE UNIQUE INDEX ux_outbox_dedup_window
-    ON public.alerts_outbox (dedup_key)
-    WHERE created_at > NOW() - INTERVAL '24 hours';
+-- Dedup por chave: app_user verifica existência por dedup_key antes de inserir.
+-- Nota: partial index com NOW() não é permitido em PostgreSQL (NOW() é volátil);
+-- a janela de 24h é enforçada em código pelo worker do outbox.
+CREATE INDEX IF NOT EXISTS ix_outbox_dedup_key
+    ON public.alerts_outbox (dedup_key);
 
 -- =============================================================================
 -- Row-Level Security (RLS) — isolamento de tenant
