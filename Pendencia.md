@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-17 (PR #24 — PgBouncer multi-user + CI integration job + QT-09 fechado)
+> Atualizado em: 2026-06-17 (PR #24 merged — PgBouncer multi-user + CI integration job + QT-09 fechado)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -255,7 +255,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | Cobertura ~99% (todos os gaps cobríveis eliminados) | #20 | 528 testes | ✅ merged (ecea0b4) | — |
 | Fase 1c: PostgresDecisionLedger + RLS wired no router | #21 | 540+ testes | ✅ merged | ⚠️ PD-07 |
 | Serialização + constraint + anchors + DATABASE_URL app_user | #22 | 14 testes ledger | ✅ merged | ⚠️ QT-08 |
-| PgBouncer multi-user + CI integration job + QT-09 | #24 | + integration job CI | em revisão | ⚠️ QT-08 |
+| PgBouncer multi-user + CI integration job + QT-09 | #24 | + integration job CI | ✅ merged | ⚠️ QT-08 |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
