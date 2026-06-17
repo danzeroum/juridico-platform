@@ -9,6 +9,7 @@ include:
   - docker/compose/ingest.yml
   - docker/compose/ollama.yml
   - docker/compose/traefik.yml
+  - docker/compose/frontend.yml
 
 networks:
   juridico-net:

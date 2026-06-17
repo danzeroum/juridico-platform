@@ -1,0 +1,33 @@
+# Generated build output (created inside the container)
+**/.next
+**/dist
+**/build
+**/out
+
+# Local dependencies (installed fresh inside the container)
+**/node_modules
+
+# Local env files (secrets must come via compose environment:, never baked in)
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# Editor / OS
+**/.DS_Store
+**/Thumbs.db
+**/.vscode
+**/.idea
+
+# Logs
+**/*.log
+**/pnpm-debug.log*
+**/npm-debug.log*
+
+# Test artefacts
+**/coverage
+**/__snapshots__
