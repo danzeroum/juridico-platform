@@ -44,7 +44,8 @@ jobs:
             pytest-cov==5.0.0 \
             pytest-asyncio==0.24.0 \
             "PyJWT[crypto]==2.9.0" \
-            cryptography==43.0.3 || true
+            cryptography==43.0.3 \
+            "sqlalchemy>=2.0,<3" || true
 
       - name: Run unit tests with coverage
         run: |

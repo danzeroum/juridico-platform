@@ -41,8 +41,23 @@ except ImportError:
     _OTEL = False
     _tracer = None  # type: ignore[assignment]
 
-# In-memory ledger para Fase 1b. Fase 1c migra para Postgres com âncoras.
+# Fallback em memória para dev/testes sem DATABASE_URL.
+# Em produção (DATABASE_URL configurado), _get_ledger() retorna PostgresDecisionLedger.
 _ledger = DecisionLedger()
+
+
+def _get_ledger(tenant_id: str) -> DecisionLedger:
+    """
+    Retorna PostgresDecisionLedger (Fase 1c) se DATABASE_URL configurado,
+    senão o singleton em memória (dev/testes). Nunca compartilha estado
+    entre tenants: cada chamada com DATABASE_URL cria instância por tenant.
+    """
+    import os
+    if os.environ.get("DATABASE_URL"):
+        from services.shared.ledger.merkle import PostgresDecisionLedger
+        return PostgresDecisionLedger(tenant_id)
+    return _ledger
+
 
 router = APIRouter(tags=["legalscore"])
 
@@ -216,7 +231,7 @@ async def score_company(
         # subject_token: AES-256-GCM por titular (crypto-shredding via erase_titular)
         pseudonym = hash_user_id(body.cnpj)
         subject_token = encrypt_for_ledger(pseudonym, tenant_id)
-        ledger_entry = _ledger.add_entry(
+        ledger_entry = _get_ledger(tenant_id).add_entry(
             request_id=request_id,
             product="legalscore",
             inputs=inputs_for_ledger,
@@ -474,9 +489,9 @@ async def model_metrics(request: Request) -> Any:
     },
 )
 async def audit_trail(request_id: str, request: Request) -> Any:
-    _get_tenant(request)
+    tenant_id = _get_tenant(request)
     try:
-        proof = _ledger.get_proof(request_id)
+        proof = _get_ledger(tenant_id).get_proof(request_id)
     except KeyError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -146,7 +146,10 @@ CREATE UNIQUE INDEX ux_outbox_dedup_window
 ALTER TABLE ledger.entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ledger.entries FORCE ROW LEVEL SECURITY;
 
--- Superusuário (owner) bypassa RLS para operações de manutenção
+-- ATENÇÃO: com FORCE ROW LEVEL SECURITY o owner da tabela É sujeito à RLS.
+-- Porém, superusuários (SUPERUSER) AINDA bypassam FORCE RLS no PostgreSQL —
+-- esse bypass não pode ser eliminado por política SQL.
+-- A aplicação DEVE conectar como app_user (definido abaixo), NÃO como postgres.
 ALTER TABLE ledger.entries OWNER TO CURRENT_USER;
 
 DROP POLICY IF EXISTS ledger_tenant_isolation ON ledger.entries;
@@ -191,5 +194,41 @@ VALUES (
     'Tenant de Desenvolvimento',
     'enterprise'
 ) ON CONFLICT (slug) DO NOTHING;
+
+-- =============================================================================
+-- Role de aplicação dedicado (não-superusuário)
+--
+-- Superusuários bypassam FORCE ROW LEVEL SECURITY no PostgreSQL.
+-- DATABASE_URL DEVE apontar para app_user, nunca para postgres.
+-- Senha padrão abaixo deve ser substituída por Docker Secret em produção:
+--   docker secret create DB_APP_PASSWORD <(openssl rand -hex 32)
+-- =============================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_user') THEN
+        CREATE ROLE app_user
+            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT LOGIN
+            PASSWORD 'change_in_production';
+    END IF;
+END
+$$;
+
+GRANT USAGE ON SCHEMA ledger TO app_user;
+GRANT USAGE ON SCHEMA tenant TO app_user;
+GRANT USAGE ON SCHEMA ingest TO app_user;
+GRANT USAGE ON SCHEMA public TO app_user;
+
+-- Ledger: INSERT + SELECT apenas (UPDATE/DELETE bloqueado por trigger)
+GRANT SELECT, INSERT ON ledger.entries TO app_user;
+GRANT SELECT, INSERT ON ledger.anchors TO app_user;
+GRANT USAGE ON SEQUENCE ledger.anchors_id_seq TO app_user;
+
+-- Tenant: leitura de tenants/users; escrita completa em idempotency_keys
+GRANT SELECT ON tenant.tenants TO app_user;
+GRANT SELECT ON tenant.users TO app_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.idempotency_keys TO app_user;
+
+-- Alertas outbox: leitura + escrita + atualização de status (worker Celery/Oban)
+GRANT SELECT, INSERT, UPDATE ON public.alerts_outbox TO app_user;
 
 COMMIT;
