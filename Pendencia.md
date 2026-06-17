@@ -154,6 +154,14 @@
 - `docker/products/legalscore/compose.override.yml`: `DATABASE_URL` voltou para `pgbouncer:6432` (não mais direto ao Postgres)
 **Aceite:** Gateway conecta como `app_user` via PgBouncer; `SHOW CURRENT_USER` retorna `app_user`; testes de integração confirmam RLS ativa.
 
+### QT-10 — Deduplicação de alertas quebrada pelo fix do índice parcial ✅ CORRIGIDO
+**Status:** Corrigido (commit após PR #25)  
+**Problema:** O fix do `ux_outbox_dedup_window` (índice parcial com `NOW()` — proibido em PostgreSQL) trocou um índice ÚNICO por um não-único, e o comentário afirmava que "a janela de 24h é enforçada em código", mas o código não fazia esse controle. `alert_id = uuid4()` → UUID aleatório → `ON CONFLICT (alert_id) DO NOTHING` nunca ativava.  
+**Correção:** `alert_id = str(uuid.uuid5(uuid.NAMESPACE_OID, dedup_key))` em `compliance/monitor.py` e `licitawatch/monitor.py`. Mesmo (regra, identificador, referência) → mesmo `alert_id` → o `ON CONFLICT` é efetivo. Dedup por período (não janela móvel, o que é mais correto para relatórios governamentais). `publishers.py` e docstrings corrigidos.  
+**Testes:** 4 novos testes em `test_compliance_monitor.py` e `test_licitawatch_monitor.py` (determinístico × mesmo período; diferente × período diferente). 41 testes passando.
+
+---
+
 ### QT-07 — tenant.idempotency_keys é código morto
 **Status:** Identificado no review (PR #21)  
 **Contexto:** A tabela `tenant.idempotency_keys` existe em `bootstrap-db.sql`, mas o caminho real de idempotência usa Redis (`services/shared/idempotency.py`) — não o Postgres. A tabela nunca é lida nem escrita em produção. Políticas RLS criadas para ela em `bootstrap-db.sql` também são mortas.  

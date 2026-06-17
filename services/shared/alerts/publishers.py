@@ -25,10 +25,10 @@ DDL da tabela (migration Alembic):
         created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX ix_outbox_dispatch ON alerts_outbox (status, available_at);
-    -- cooldown de 24h: dedup_key unico dentro da janela
-    CREATE UNIQUE INDEX ux_outbox_dedup_window
-        ON alerts_outbox (dedup_key)
-        WHERE created_at > now() - interval '24 hours';
+    CREATE INDEX ix_outbox_dedup_key ON alerts_outbox (dedup_key);
+    -- Nota: a deduplicacao e garantida por alert_id determinístico (uuid5 do
+    -- dedup_key) nos produtores (compliance/monitor.py, licitawatch/monitor.py).
+    -- ON CONFLICT (alert_id) DO NOTHING e suficiente — sem partial index.
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ class OutboxAlertPublisher:
 
     def publish(self, envelope: AlertEnvelope) -> PublishReceipt:
         # ON CONFLICT (alert_id) DO NOTHING => idempotencia por alert_id.
-        # A unique index parcial em dedup_key cuida do cooldown de 24h.
+        # alert_id e uuid5(dedup_key) nos produtores — mesmo evento → mesmo id.
         cur = self._db.execute(
             """
             INSERT INTO alerts_outbox (alert_id, dedup_key, envelope)
