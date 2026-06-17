@@ -60,7 +60,10 @@ CREATE TABLE IF NOT EXISTS ledger.entries (
     weights_applied JSONB NOT NULL DEFAULT '{}',
     subject_token   TEXT,                           -- pseudônimo cifrado AES-256-GCM (não PII)
     leaf_hash       VARCHAR(64),                    -- hash da entrada nesta posição da árvore
-    merkle_root     VARCHAR(64)                     -- raiz no momento da inserção
+    merkle_root     VARCHAR(64),                    -- raiz no momento da inserção
+    -- Garante que dois requests concorrentes do mesmo tenant não bifurcam a cadeia Merkle.
+    -- Sem esta constraint, um entry_index duplicado corrompe silenciosamente a prova.
+    CONSTRAINT ledger_entries_tenant_idx_unique UNIQUE (tenant_id, entry_index)
 );
 
 CREATE INDEX IF NOT EXISTS idx_ledger_product   ON ledger.entries(product);
@@ -82,11 +85,15 @@ CREATE TRIGGER ledger_immutable
     BEFORE UPDATE OR DELETE ON ledger.entries
     FOR EACH ROW EXECUTE FUNCTION ledger.prevent_modification();
 
--- Âncoras periódicas (raiz snapshots para prova de inclusão eficiente em grande escala)
+-- Âncoras periódicas: checkpoint de raiz Merkle a cada _ANCHOR_INTERVAL entradas.
+-- tenant_id: necessário para RLS (cada tenant tem sua própria cadeia de âncoras).
+-- Não reduz O(N) do recálculo atual; suporta auditoria histórica sem replay total.
+-- Migração para O(log N) requer MMR (ver Pendencia.md QT-08).
 CREATE TABLE IF NOT EXISTS ledger.anchors (
     id              SERIAL PRIMARY KEY,
     anchor_at_index BIGINT NOT NULL,
     merkle_root     VARCHAR(64) NOT NULL,
+    tenant_id       UUID REFERENCES tenant.tenants(id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -169,6 +176,23 @@ CREATE POLICY ledger_tenant_select ON ledger.entries
 -- Policy para INSERT (só o tenant correto pode inserir)
 DROP POLICY IF EXISTS ledger_tenant_insert ON ledger.entries;
 CREATE POLICY ledger_tenant_insert ON ledger.entries
+    FOR INSERT
+    WITH CHECK (
+        tenant_id = (current_setting('app.tenant_id'))::uuid
+    );
+
+-- RLS para ledger.anchors (checkpoints de raiz por tenant)
+ALTER TABLE ledger.anchors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ledger.anchors FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS ledger_anchors_tenant_isolation ON ledger.anchors;
+CREATE POLICY ledger_anchors_tenant_isolation ON ledger.anchors
+    USING (
+        tenant_id = (current_setting('app.tenant_id'))::uuid
+    );
+
+DROP POLICY IF EXISTS ledger_anchors_tenant_insert ON ledger.anchors;
+CREATE POLICY ledger_anchors_tenant_insert ON ledger.anchors
     FOR INSERT
     WITH CHECK (
         tenant_id = (current_setting('app.tenant_id'))::uuid

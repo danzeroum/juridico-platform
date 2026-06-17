@@ -5,7 +5,7 @@ A camada de conexão (tenant_transaction + SQLAlchemy) é substituída por mocks
 via unittest.mock.patch; nenhum Postgres real é necessário.
 
 Verifica:
-1. add_entry executa COUNT + SELECT leaf_hashes + INSERT com parâmetros corretos
+1. add_entry executa lock + COUNT + SELECT leaf_hashes + INSERT (4 queries)
 2. add_entry entry_index = COUNT(*) das entradas existentes
 3. get_proof retorna estrutura completa (entry_id, leaf_hash, proof, root)
 4. get_proof levanta KeyError para entry_id inexistente
@@ -14,6 +14,7 @@ Verifica:
 7. verify_integrity retorna False quando ledger vazio (db_root = None)
 8. __len__ delega para COUNT(*)
 9. Múltiplos tenants isolados (cada instância usa seu próprio tenant_id)
+10. add_entry grava checkpoint em ledger.anchors a cada _ANCHOR_INTERVAL entradas
 """
 
 from contextlib import contextmanager
@@ -33,7 +34,8 @@ def _make_mock_conn(count: int = 0, leaf_hashes: list = None,
     - "merkle_root" + "DESC"  → scalar = last_root   (verify_integrity)
     - "entry_index, leaf_hash"→ fetchone = entry_row  (get_proof entry lookup)
     - "leaf_hash" + "ORDER"   → fetchall = leaf_hashes (add_entry / get_proof)
-    - INSERT                  → noop
+    - pg_advisory_xact_lock   → noop (lock de serialização, retorno ignorado)
+    - INSERT / anchor INSERT   → noop
     """
     leaf_hashes = leaf_hashes or []
     conn = MagicMock()
@@ -95,14 +97,14 @@ class TestPostgresDecisionLedger:
 
         assert entry["entry_index"] == 3
 
-    def test_add_entry_executa_tres_queries(self):
-        """add_entry deve executar COUNT, SELECT leaf_hashes e INSERT."""
+    def test_add_entry_executa_quatro_queries(self):
+        """add_entry deve executar lock + COUNT + SELECT leaf_hashes + INSERT."""
         conn = _make_mock_conn(count=0, leaf_hashes=[])
         with patch("services.shared.tenant_db.tenant_transaction", new=_tx_factory(conn)):
             from services.shared.ledger.merkle import PostgresDecisionLedger
             PostgresDecisionLedger("tenant-1").add_entry("r1", "legalscore", {}, {})
 
-        assert conn.execute.call_count == 3
+        assert conn.execute.call_count == 4
 
     def test_add_entry_insert_com_tenant_id_correto(self):
         """O INSERT deve incluir o tenant_id passado ao construtor."""
@@ -111,7 +113,8 @@ class TestPostgresDecisionLedger:
             from services.shared.ledger.merkle import PostgresDecisionLedger
             PostgresDecisionLedger("TENANT-ABC").add_entry("r1", "legalscore", {}, {})
 
-        insert_call = conn.execute.call_args_list[2]
+        # call[0]=lock, call[1]=count, call[2]=select_hashes, call[3]=insert_entry
+        insert_call = conn.execute.call_args_list[3]
         params = insert_call.args[1] if len(insert_call.args) > 1 else {}
         assert params.get("tenant_id") == "TENANT-ABC"
 
@@ -232,3 +235,29 @@ class TestPostgresDecisionLedger:
         assert "tenant-A" in called_with
         assert "tenant-B" in called_with
         assert called_with.count("tenant-A") == called_with.count("tenant-B")
+
+    def test_add_entry_cria_anchor_a_cada_anchor_interval(self):
+        """A cada _ANCHOR_INTERVAL entradas, add_entry deve gravar checkpoint em ledger.anchors."""
+        from services.shared.ledger.merkle import _ANCHOR_INTERVAL, PostgresDecisionLedger
+
+        hashes = ["a" * 64] * (_ANCHOR_INTERVAL - 1)
+        conn = _make_mock_conn(count=_ANCHOR_INTERVAL - 1, leaf_hashes=hashes)
+        with patch("services.shared.tenant_db.tenant_transaction", new=_tx_factory(conn)):
+            PostgresDecisionLedger("tenant-1").add_entry("r-boundary", "legalscore", {}, {})
+
+        # lock + count + select_hashes + insert_entry + insert_anchor = 5 calls
+        assert conn.execute.call_count == 5
+        anchor_call = conn.execute.call_args_list[4]
+        anchor_sql = str(anchor_call.args[0])
+        assert "ledger.anchors" in anchor_sql
+
+    def test_add_entry_nao_cria_anchor_antes_do_intervalo(self):
+        """Abaixo de _ANCHOR_INTERVAL entradas, nenhum checkpoint deve ser gravado."""
+        from services.shared.ledger.merkle import PostgresDecisionLedger
+
+        conn = _make_mock_conn(count=0, leaf_hashes=[])
+        with patch("services.shared.tenant_db.tenant_transaction", new=_tx_factory(conn)):
+            PostgresDecisionLedger("tenant-1").add_entry("r1", "legalscore", {}, {})
+
+        # lock + count + select_hashes + insert_entry = 4 calls (sem anchor)
+        assert conn.execute.call_count == 4

@@ -106,10 +106,13 @@
 
 ---
 
-### PD-07 — DATABASE_URL deve usar credenciais de app_user (não postgres)
-**Status:** Pendente de configuração de deploy  
-**Contexto:** `PostgresDecisionLedger` (PR #21) usa `tenant_transaction` que aplica `SET LOCAL app.tenant_id` e RLS. Se `DATABASE_URL` apontar para o usuário `postgres` (superusuário), o PostgreSQL bypassa `FORCE ROW LEVEL SECURITY` silenciosamente — a RLS fica sem efeito, abrindo risco de vazamento entre tenants.  
-**Ação necessária antes do go-live:** Configurar `DATABASE_URL=postgresql://app_user:senha@host:5432/db` — o role `app_user` (NOSUPERUSER) está definido em `bootstrap-db.sql` com grants mínimos. Em Docker Compose: `DATABASE_URL` deve referenciar Docker Secret para a senha.  
+### PD-07 — DATABASE_URL deve usar credenciais de app_user (não postgres) ✅ IMPLEMENTADO (PR #22)
+**Status:** Implementado para o gateway (serviço de aplicação principal).  
+**O que foi feito:**
+- `docker/products/legalscore/compose.override.yml`: `DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB}` (direto no Postgres, não via PgBouncer — ver QT-09)
+- `.env.example`: adicionado `APP_USER_PASSWORD=TROQUE_SENHA_FORTE`
+- `scripts/migrations/001_...sql`: migration idempotente para bancos existentes
+**Pendência de produção:** Substituir `APP_USER_PASSWORD` por Docker Secret: `docker secret create APP_USER_PASSWORD <(openssl rand -hex 32)`  
 **Aceite:** `SHOW CURRENT_USER` retorna `app_user`; não retorna `postgres` ou `superuser`.
 
 ---
@@ -131,6 +134,23 @@
 
 ### QT-02 — Neo4j Community sem backup a quente
 **Status:** Anotado. Backup manual via `neo4j-admin dump` funciona, mas exige parar o serviço (ou usar snapshot de volume). Impacto: janela de manutenção para backup até decisão PD-01.
+
+### QT-08 — Ledger O(N) por operação — requer migração para MMR
+**Status:** Documentado; mitigado mas não resolvido  
+**Contexto:** `add_entry` e `get_proof` leem **todas** as folhas do tenant (`SELECT leaf_hash ... ORDER BY entry_index`) para recalcular a raiz Merkle. Custo: O(N) queries + O(N) CPU por inserção. Em 7 anos de uso, N cresce sem limite e o p95 do `/score` irá estourar o SLA de 1,5s.  
+**Mitigações implementadas (PR #22):**
+- `pg_advisory_xact_lock` serializa escritas por tenant (previne bifurcação da cadeia)
+- `UNIQUE (tenant_id, entry_index)` torna corrida detectável (erro em vez de corrupção silenciosa)
+- Checkpoint em `ledger.anchors` a cada 1024 entradas (auditoria histórica)
+**O que NÃO foi resolvido:** O SELECT O(N) em si. Checkpoints não reduzem o custo porque o algoritmo `_compute_merkle_root` requer ALL leaf hashes para o balanced binary tree.  
+**Solução real:** Migrar para **Merkle Mountain Range (MMR)** — O(log N) por inserção e prova, com peaks armazenados em `ledger.anchors`. Requer mudança no formato de prova (compatibilidade quebrada). Fazer ANTES de N > 10k entries por tenant.  
+**Gatilho:** p95 de `/score` > 1,0s em load test, ou N > 5000 entries por tenant.
+
+### QT-09 — PgBouncer não conhece app_user (multi-user auth pendente)
+**Status:** Gateway conecta direto ao Postgres (não via PgBouncer) como workaround  
+**Contexto:** PgBouncer está configurado com apenas um usuário (`POSTGRES_USER`). Para aceitar `app_user`, é necessário montar um `userlist.txt` com ambos os usuários (ou usar `auth_query`). O gateway atualmente bypassa o PgBouncer, perdendo o pooling de transações.  
+**Impacto:** Em alta concorrência, o gateway abre conexões diretas ao Postgres. O SQLAlchemy QueuePool (padrão: 5 conexões) mitiga isso, mas sob carga real pode saturar o limite de conexões do PG.  
+**Ação sugerida:** Configurar PgBouncer com `auth_query` ou `userlist.txt` incluindo `app_user`, e atualizar `DATABASE_URL` do gateway para apontar para `pgbouncer:6432`.
 
 ### QT-07 — tenant.idempotency_keys é código morto
 **Status:** Identificado no review (PR #21)  
