@@ -255,4 +255,25 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.idempotency_keys TO app_user;
 -- Alertas outbox: leitura + escrita + atualização de status (worker Celery/Oban)
 GRANT SELECT, INSERT, UPDATE ON public.alerts_outbox TO app_user;
 
+-- =============================================================================
+-- Tabela de sonda para testes de isolamento de tenant (CI + integração local)
+-- Criada pelo bootstrap para que os testes rodem como app_user sem DDL privileges.
+-- Pré-condição: testes de integração em CI executam bootstrap-db.sql antes de rodar.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.tenant_isolation_probe (
+    id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL,
+    payload   TEXT NOT NULL
+);
+
+ALTER TABLE public.tenant_isolation_probe ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tenant_isolation_probe FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS probe_isolation ON public.tenant_isolation_probe;
+CREATE POLICY probe_isolation ON public.tenant_isolation_probe
+    USING (tenant_id = (current_setting('app.tenant_id'))::uuid)
+    WITH CHECK (tenant_id = (current_setting('app.tenant_id'))::uuid);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tenant_isolation_probe TO app_user;
+
 COMMIT;

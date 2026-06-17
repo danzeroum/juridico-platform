@@ -45,15 +45,19 @@ services:
     image: edoburu/pgbouncer:1.20
     container_name: pgbouncer
     restart: unless-stopped
+    # Entrypoint customizado: gera userlist.txt com POSTGRES_USER + app_user
+    # antes de iniciar o pgbouncer. Permite que o gateway conecte como app_user
+    # (NOSUPERUSER) via PgBouncer, mantendo a RLS ativa no caminho real.
+    entrypoint: ["/bin/sh", "/docker-config/pgbouncer-init.sh"]
     environment:
-      PGBOUNCER_DATABASE: ${POSTGRES_DB}
-      PGBOUNCER_USER: ${POSTGRES_USER}
-      PGBOUNCER_PASSWORD: ${POSTGRES_PASSWORD}
-      PGBOUNCER_SERVERS: postgres:5432
-      PGBOUNCER_AUTH_TYPE: md5
-      PGBOUNCER_POOL_MODE: transaction
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_USER_PASSWORD: ${APP_USER_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       PGBOUNCER_MAX_CLIENT_CONN: 1000
       PGBOUNCER_DEFAULT_POOL_SIZE: 20
+    volumes:
+      - ./docker/config/pgbouncer-init.sh:/docker-config/pgbouncer-init.sh
     # SEM ports: no host
     depends_on:
       postgres:

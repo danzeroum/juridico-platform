@@ -165,3 +165,68 @@ jobs:
             exit 1
           fi
           echo "OK: merkle.py sem janela limitada"
+
+  # ---------------------------------------------------------------------------
+  # Testes de integração — RLS + isolamento de tenant contra Postgres real
+  #
+  # Prova que app_user (NOSUPERUSER) está sujeito a FORCE ROW LEVEL SECURITY e
+  # que SET LOCAL (set_config is_local=true) não vaza entre transações no pool.
+  # Sem Postgres real no CI, esses testes eram pulados silenciosamente.
+  #
+  # Nota: testa via Postgres direto (porta 5432), não via PgBouncer — a propriedade
+  # de SET LOCAL é do protocolo Postgres, independente do proxy. O comportamento
+  # do PgBouncer (reuso de conexão em transaction mode) é validado no compose local.
+  # ---------------------------------------------------------------------------
+  integration-tests:
+    name: Integration Tests — RLS + tenant isolation (Python 3.12 + Postgres 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: juridico
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: juridico_platform
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Bootstrap database (schema + RLS + app_user + probe table)
+        run: |
+          PGPASSWORD=testpassword psql -h localhost -U juridico -d juridico_platform \
+            -f scripts/bootstrap-db.sql
+          PGPASSWORD=testpassword psql -h localhost -U juridico -d juridico_platform \
+            -c "ALTER ROLE app_user PASSWORD 'testpassword';"
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            pydantic==2.9.2 \
+            pytest==8.3.3 \
+            pytest-asyncio==0.24.0 \
+            "sqlalchemy>=2.0,<3"
+
+      - name: Run integration tests as app_user
+        run: pytest tests/integration/ -m integration -v
+        env:
+          DATABASE_URL: postgresql://app_user:testpassword@localhost:5432/juridico_platform
+          HMAC_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ENV: test
