@@ -264,6 +264,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | Fase 1c: PostgresDecisionLedger + RLS wired no router | #21 | 540+ testes | ✅ merged | ⚠️ PD-07 |
 | Serialização + constraint + anchors + DATABASE_URL app_user | #22 | 14 testes ledger | ✅ merged | ⚠️ QT-08 |
 | PgBouncer multi-user + CI integration job + QT-09 | #24 | + integration job CI | ✅ merged | ⚠️ QT-08 |
+| fix(alerts): alert_id uuid5 — dedup restaurada (QT-10) | #26 | 41 testes | ✅ merged | — |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
