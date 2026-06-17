@@ -1,0 +1,16 @@
+{
+  "name": "@juridico/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tailwind": "./src/tailwind.preset.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
