@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+@layer base {
+  html {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    color: #13181f;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+@layer utilities {
+  .font-mono-data {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+}
+
+/* Barflow animation for job progress */
+@keyframes barflow {
+  0% { background-position: 0 0; }
+  100% { background-position: 32px 0; }
+}
+
+/* Pulse for degradation dots and live indicators */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@juridico/platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@juridico/tokens": "workspace:*",
+    "@juridico/ui": "workspace:*",
+    "@tanstack/react-query": "^5.62.2",
+    "@tanstack/react-query-devtools": "^5.62.2",
+    "lucide-react": "^0.468.0",
+    "recharts": "^2.13.3",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.4",
+    "next": "14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.15",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.18"
+  }
+}
