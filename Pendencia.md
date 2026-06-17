@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-16 (sessão continuada — PRs #9–#20)
+> Atualizado em: 2026-06-16 (sessão final — PR #20 merged; roadmap completo)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -215,7 +215,7 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | 4 — LicitaWatch/PetiBot/ConciliaIA | #8 | 93.16% / 351 testes | ✅ | ⚠️ P0-1, P0-4 |
 | E2E HTTP + PNCP task | #16 | 467 testes | ✅ | E2E Docker pendente (infra) |
 | Cobertura 95%+ (kmeans/RAG/factory/ratelimit/quality) | #17–#19 | 502 testes | ✅ | — |
-| Cobertura ~99% (todos os gaps cobríveis eliminados) | #20 + extras | ~580 testes | ✅ (CI em andamento) | — |
+| Cobertura ~99% (todos os gaps cobríveis eliminados) | #20 | 528 testes | ✅ merged (ecea0b4) | — |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 

@@ -147,3 +147,155 @@ class DecisionLedger:
 
     def __len__(self) -> int:
         return len(self._entries)
+
+
+class PostgresDecisionLedger:
+    """
+    Decision Ledger com backend Postgres (Fase 1c).
+
+    Usa tenant_transaction() para todas as operações; a RLS do Postgres enforça
+    isolamento de tenant. O Merkle tree é por tenant: entradas ordenadas por
+    entry_index, raiz recalculada a cada INSERT (O(N) em leaf_hashes — para N >
+    10k, usar âncoras periódicas na tabela ledger.anchors).
+
+    A aplicação DEVE conectar como role não-superusuário (app_user definido em
+    bootstrap-db.sql). No PostgreSQL, superusuários bypassam FORCE ROW LEVEL
+    SECURITY — esse vetor não pode ser eliminado por política SQL.
+    """
+
+    def __init__(self, tenant_id: str) -> None:
+        self._tenant_id = tenant_id
+
+    def add_entry(
+        self,
+        request_id: str,
+        product: str,
+        inputs: dict[str, Any],
+        outputs: dict[str, Any],
+        sources: list[str] | None = None,
+        weights: dict[str, Any] | None = None,
+        subject_token: str | None = None,
+    ) -> dict[str, Any]:
+        from sqlalchemy import text as sa_text
+
+        from services.shared.tenant_db import tenant_transaction
+
+        with tenant_transaction(self._tenant_id) as conn:
+            entry_index = int(
+                conn.execute(sa_text("SELECT COUNT(*) FROM ledger.entries")).scalar() or 0
+            )
+            existing_hashes: list[str] = [
+                r[0]
+                for r in conn.execute(
+                    sa_text("SELECT leaf_hash FROM ledger.entries ORDER BY entry_index")
+                ).fetchall()
+            ]
+
+            entry: dict[str, Any] = {
+                "request_id": request_id,
+                "entry_index": entry_index,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "product": product,
+                "inputs_hash": _sha256(json.dumps(inputs, sort_keys=True)),
+                "outputs_hash": _sha256(json.dumps(outputs, sort_keys=True)),
+                "sources": sources or [],
+                "weights_applied": weights or {},
+                "subject_token": subject_token,
+            }
+            leaf_hash = _sha256(json.dumps(entry, sort_keys=True))
+            new_root = _compute_merkle_root(existing_hashes + [leaf_hash])
+
+            conn.execute(
+                sa_text(
+                    """
+                    INSERT INTO ledger.entries
+                        (request_id, entry_index, product, tenant_id, inputs_hash,
+                         outputs_hash, sources, weights_applied, subject_token,
+                         leaf_hash, merkle_root)
+                    VALUES
+                        (:request_id, :entry_index, :product, :tenant_id::uuid,
+                         :inputs_hash, :outputs_hash, :sources::jsonb,
+                         :weights_applied::jsonb, :subject_token, :leaf_hash, :merkle_root)
+                    """
+                ),
+                {
+                    "request_id": request_id,
+                    "entry_index": entry_index,
+                    "product": product,
+                    "tenant_id": self._tenant_id,
+                    "inputs_hash": entry["inputs_hash"],
+                    "outputs_hash": entry["outputs_hash"],
+                    "sources": json.dumps(sources or []),
+                    "weights_applied": json.dumps(weights or {}),
+                    "subject_token": subject_token,
+                    "leaf_hash": leaf_hash,
+                    "merkle_root": new_root,
+                },
+            )
+
+        return {**entry, "leaf_hash": leaf_hash, "merkle_root": new_root}
+
+    def get_proof(self, entry_id: str) -> dict[str, Any]:
+        from sqlalchemy import text as sa_text
+
+        from services.shared.tenant_db import tenant_transaction
+
+        with tenant_transaction(self._tenant_id) as conn:
+            row = conn.execute(
+                sa_text(
+                    "SELECT entry_index, leaf_hash FROM ledger.entries "
+                    "WHERE request_id = :rid"
+                ),
+                {"rid": entry_id},
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Entrada não encontrada no ledger: {entry_id!r}")
+            idx, leaf_hash = int(row[0]), row[1]
+
+            all_hashes: list[str] = [
+                r[0]
+                for r in conn.execute(
+                    sa_text("SELECT leaf_hash FROM ledger.entries ORDER BY entry_index")
+                ).fetchall()
+            ]
+
+        return {
+            "entry_id": entry_id,
+            "entry_index": idx,
+            "leaf_hash": leaf_hash,
+            "proof": _generate_proof(all_hashes, idx),
+            "root": _compute_merkle_root(all_hashes),
+        }
+
+    def verify_integrity(self, entry_id: str, proof: dict[str, Any]) -> bool:
+        from sqlalchemy import text as sa_text
+
+        from services.shared.tenant_db import tenant_transaction
+
+        current = proof["leaf_hash"]
+        for step in proof["proof"]:
+            sibling = step["sibling"]
+            if step["position"] == "right":
+                current = _sha256(current + sibling)
+            else:
+                current = _sha256(sibling + current)
+
+        with tenant_transaction(self._tenant_id) as conn:
+            db_root = conn.execute(
+                sa_text(
+                    "SELECT merkle_root FROM ledger.entries "
+                    "ORDER BY entry_index DESC LIMIT 1"
+                )
+            ).scalar()
+
+        return db_root is not None and current == db_root
+
+    def __len__(self) -> int:
+        from sqlalchemy import text as sa_text
+
+        from services.shared.tenant_db import tenant_transaction
+
+        with tenant_transaction(self._tenant_id) as conn:
+            return int(
+                conn.execute(sa_text("SELECT COUNT(*) FROM ledger.entries")).scalar() or 0
+            )
