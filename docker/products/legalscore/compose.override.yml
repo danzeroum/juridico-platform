@@ -6,8 +6,7 @@ services:
       dockerfile: services/gateway/Dockerfile
     container_name: legalscore-api
     environment:
-      # Conecta direto ao Postgres como app_user (NOSUPERUSER) — RLS ativa.
-      # NÃO usa PgBouncer aqui porque o PgBouncer atual só conhece POSTGRES_USER.
-      # Para usar PgBouncer com app_user: montar userlist.txt com ambos os usuários
-      # (ver Pendencia.md QT-09). SQLAlchemy pool supre o pooling neste ponto.
-      - DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Conecta via PgBouncer (pool_mode=transaction) como app_user (NOSUPERUSER).
+      # RLS ativa: app_user bypassa FORCE RLS diferente de postgres (superusuário).
+      # PgBouncer conhece app_user via pgbouncer-init.sh (userlist.txt gerado em runtime).
+      - DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}

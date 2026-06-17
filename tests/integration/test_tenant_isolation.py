@@ -53,7 +53,9 @@ CREATE POLICY probe_isolation ON public.tenant_isolation_probe
 
 def _engine():
     if not os.getenv("DATABASE_URL"):
-        pytest.skip("DATABASE_URL não definido — suba o compose e aponte ao PgBouncer (6432).")
+        pytest.skip(
+        "DATABASE_URL não definido — em dev: pgbouncer:6432; em CI: postgres:5432 como app_user."
+    )
     from services.shared.tenant_db import _get_engine
 
     eng = _get_engine()
@@ -68,19 +70,39 @@ def _engine():
 @pytest.fixture(scope="module")
 def engine():
     eng = _engine()
-    # Setup da tabela-sonda (mesma forma de RLS do bootstrap-db.sql).
-    try:
-        with eng.begin() as conn:
-            for stmt in filter(None, (s.strip() for s in PROBE_DDL.split(";"))):
-                conn.execute(text(stmt))
-    except Exception as exc:
-        pytest.skip(f"Sem privilégio para criar tabela-sonda/policy: {exc}")
-
-    # Seed: 5 linhas de cada tenant, inseridas DENTRO da transação do próprio tenant.
     from services.shared.tenant_db import tenant_transaction
 
+    # Em CI, bootstrap-db.sql cria a tabela antes dos testes — pular DDL se já existe.
+    # Em dev com POSTGRES_USER, tenta criar; com app_user (sem DDL), pula e falha
+    # com mensagem clara.
+    with eng.connect() as conn:
+        table_exists = conn.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = 'tenant_isolation_probe'"
+            )
+        ).scalar()
+
+    if not table_exists:
+        try:
+            with eng.begin() as conn:
+                for stmt in filter(None, (s.strip() for s in PROBE_DDL.split(";"))):
+                    conn.execute(text(stmt))
+        except Exception as exc:
+            pytest.skip(
+                f"Tabela-sonda ausente e sem privilégio DDL: {exc}. "
+                "Em CI: verifique que bootstrap-db.sql foi executado antes dos testes. "
+                "Em dev: conecte como POSTGRES_USER para criar a tabela uma vez."
+            )
+
+    # Seed: limpa dados anteriores e insere 5 linhas por tenant.
+    # DELETE antes do INSERT: idempotente entre re-runs sem DROP TABLE.
     for tenant in (TENANT_A, TENANT_B):
         with tenant_transaction(tenant) as conn:
+            conn.execute(
+                text("DELETE FROM public.tenant_isolation_probe WHERE tenant_id = :tid"),
+                {"tid": tenant},
+            )
             for i in range(5):
                 conn.execute(
                     text(
@@ -90,8 +112,18 @@ def engine():
                     {"id": str(uuid.uuid4()), "tid": tenant, "p": f"{tenant[-1]}-{i}"},
                 )
     yield eng
-    with eng.begin() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS public.tenant_isolation_probe"))
+
+    # Teardown: DELETE em vez de DROP — funciona com app_user (sem DDL privileges).
+    # A tabela persiste em dev (idempotência acima garante dados frescos por run).
+    try:
+        for tenant in (TENANT_A, TENANT_B):
+            with tenant_transaction(tenant) as conn:
+                conn.execute(
+                    text("DELETE FROM public.tenant_isolation_probe WHERE tenant_id = :tid"),
+                    {"tid": tenant},
+                )
+    except Exception:
+        pass
 
 
 def _read_tenant_ids(tenant: str) -> set[str]:

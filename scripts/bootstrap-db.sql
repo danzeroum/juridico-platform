@@ -133,11 +133,11 @@ CREATE TABLE IF NOT EXISTS public.alerts_outbox (
 
 CREATE INDEX IF NOT EXISTS ix_outbox_dispatch ON public.alerts_outbox (status, available_at);
 
--- Cooldown de 24h: dedup_key único dentro da janela (evita alertas duplicados)
-DROP INDEX IF EXISTS ux_outbox_dedup_window;
-CREATE UNIQUE INDEX ux_outbox_dedup_window
-    ON public.alerts_outbox (dedup_key)
-    WHERE created_at > NOW() - INTERVAL '24 hours';
+-- Dedup por chave: app_user verifica existência por dedup_key antes de inserir.
+-- Nota: partial index com NOW() não é permitido em PostgreSQL (NOW() é volátil);
+-- a janela de 24h é enforçada em código pelo worker do outbox.
+CREATE INDEX IF NOT EXISTS ix_outbox_dedup_key
+    ON public.alerts_outbox (dedup_key);
 
 -- =============================================================================
 -- Row-Level Security (RLS) — isolamento de tenant
@@ -254,5 +254,26 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON tenant.idempotency_keys TO app_user;
 
 -- Alertas outbox: leitura + escrita + atualização de status (worker Celery/Oban)
 GRANT SELECT, INSERT, UPDATE ON public.alerts_outbox TO app_user;
+
+-- =============================================================================
+-- Tabela de sonda para testes de isolamento de tenant (CI + integração local)
+-- Criada pelo bootstrap para que os testes rodem como app_user sem DDL privileges.
+-- Pré-condição: testes de integração em CI executam bootstrap-db.sql antes de rodar.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public.tenant_isolation_probe (
+    id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL,
+    payload   TEXT NOT NULL
+);
+
+ALTER TABLE public.tenant_isolation_probe ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tenant_isolation_probe FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS probe_isolation ON public.tenant_isolation_probe;
+CREATE POLICY probe_isolation ON public.tenant_isolation_probe
+    USING (tenant_id = (current_setting('app.tenant_id'))::uuid)
+    WITH CHECK (tenant_id = (current_setting('app.tenant_id'))::uuid);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tenant_isolation_probe TO app_user;
 
 COMMIT;

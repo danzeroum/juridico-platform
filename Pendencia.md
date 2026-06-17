@@ -1,7 +1,7 @@
 # Pendências — Decisões e Bloqueios
 
 > Documento de anotações para o dono (danzeroum) revisar quando voltar.
-> Atualizado em: 2026-06-17 (PR #22 merged — serialização por tenant + constraint única + anchors RLS + DATABASE_URL app_user)
+> Atualizado em: 2026-06-17 (PR #24 — PgBouncer multi-user + CI integration job + QT-09 fechado)
 >
 > **Distinção importante:** "Código merged / CI verde" ≠ "DoD verde (pronto)".
 > A tabela de fases abaixo usa duas colunas. Nenhuma fase está "pronta" enquanto
@@ -146,11 +146,13 @@
 **Solução real:** Migrar para **Merkle Mountain Range (MMR)** — O(log N) por inserção e prova, com peaks armazenados em `ledger.anchors`. Requer mudança no formato de prova (compatibilidade quebrada). Fazer ANTES de N > 10k entries por tenant.  
 **Gatilho:** p95 de `/score` > 1,0s em load test, ou N > 5000 entries por tenant.
 
-### QT-09 — PgBouncer não conhece app_user (multi-user auth pendente)
-**Status:** Gateway conecta direto ao Postgres (não via PgBouncer) como workaround  
-**Contexto:** PgBouncer está configurado com apenas um usuário (`POSTGRES_USER`). Para aceitar `app_user`, é necessário montar um `userlist.txt` com ambos os usuários (ou usar `auth_query`). O gateway atualmente bypassa o PgBouncer, perdendo o pooling de transações.  
-**Impacto:** Em alta concorrência, o gateway abre conexões diretas ao Postgres. O SQLAlchemy QueuePool (padrão: 5 conexões) mitiga isso, mas sob carga real pode saturar o limite de conexões do PG.  
-**Ação sugerida:** Configurar PgBouncer com `auth_query` ou `userlist.txt` incluindo `app_user`, e atualizar `DATABASE_URL` do gateway para apontar para `pgbouncer:6432`.
+### QT-09 — PgBouncer não conhece app_user (multi-user auth) ✅ IMPLEMENTADO (PR #24)
+**Status:** Implementado via `docker/config/pgbouncer-init.sh`  
+**O que foi feito:**
+- `pgbouncer-init.sh`: script de inicialização que gera `userlist.txt` com ambos os usuários (`POSTGRES_USER` + `app_user`) com MD5 calculado em runtime a partir de env vars — nenhuma senha em texto claro em arquivos
+- `docker/compose/base.yml`: pgbouncer usa `entrypoint` customizado + monta o script + recebe `APP_USER_PASSWORD`
+- `docker/products/legalscore/compose.override.yml`: `DATABASE_URL` voltou para `pgbouncer:6432` (não mais direto ao Postgres)
+**Aceite:** Gateway conecta como `app_user` via PgBouncer; `SHOW CURRENT_USER` retorna `app_user`; testes de integração confirmam RLS ativa.
 
 ### QT-07 — tenant.idempotency_keys é código morto
 **Status:** Identificado no review (PR #21)  
@@ -252,7 +254,8 @@ pela DoD** até os gates P0 fecharem (ver tabela acima e seção P0).
 | Cobertura 95%+ (kmeans/RAG/factory/ratelimit/quality) | #17–#19 | 502 testes | ✅ | — |
 | Cobertura ~99% (todos os gaps cobríveis eliminados) | #20 | 528 testes | ✅ merged (ecea0b4) | — |
 | Fase 1c: PostgresDecisionLedger + RLS wired no router | #21 | 540+ testes | ✅ merged | ⚠️ PD-07 |
-| Serialização + constraint + anchors + DATABASE_URL app_user | #22 | 14 testes ledger | ✅ merged | ⚠️ QT-08, QT-09 |
+| Serialização + constraint + anchors + DATABASE_URL app_user | #22 | 14 testes ledger | ✅ merged | ⚠️ QT-08 |
+| PgBouncer multi-user + CI integration job + QT-09 | #24 | + integration job CI | em revisão | ⚠️ QT-08 |
 
 **Caminho mínimo para o LegalScore ir a produção:** P0-1 (SLA medido) + P0-2 (restore testado) + P0-3 (crypto-shredding ✅) + fatia P0-4 do LegalScore + PD-01/02/03/05 decididos.
 
