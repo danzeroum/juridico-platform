@@ -74,7 +74,7 @@ def _redigir_secoes(
     Curto-circuita após a primeira falha de LLM para não acumular timeouts.
     """
     redigidas: list[PetiSection] = []
-    via = "template"
+    n_llm = 0
     llm_ok = True
 
     for sec in secoes:
@@ -92,11 +92,18 @@ def _redigir_secoes(
                 llm_ok = False  # provedor indisponível — não tenta as demais seções
 
         if texto:
-            via = "llm"
+            n_llm += 1
             redigidas.append(PetiSection(titulo=sec.titulo, conteudo=texto, precedentes=sec.precedentes))
         else:
             redigidas.append(sec)
 
+    # Proveniência honesta: só "llm" quando TODAS as seções foram redigidas por IA.
+    if n_llm == 0:
+        via = "template"
+    elif n_llm == len(secoes):
+        via = "llm"
+    else:
+        via = "parcial"
     return redigidas, via
 
 
@@ -143,10 +150,15 @@ def run_agente(request: DefensorRequest) -> DefensorResponse:
     ))
 
     secoes, defesa_via = _redigir_secoes(request, peti.secoes)
+    _detalhe_redacao = {
+        "llm": "rascunho via IA",
+        "parcial": "rascunho parcial (IA + template)",
+        "template": "rascunho (template)",
+    }
     eventos.append(EventoAgente(
         ts=_now_iso(), evento="defesa.redigindo",
-        detalhe="rascunho via IA" if defesa_via == "llm" else "rascunho (template)",
-        status="ok" if defesa_via == "llm" else "running",
+        detalhe=_detalhe_redacao[defesa_via],
+        status="ok" if defesa_via != "template" else "running",
     ))
     eventos.append(EventoAgente(
         ts=_now_iso(), evento="defesa.pronta", detalhe=f"{len(secoes)} seções",

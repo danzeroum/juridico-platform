@@ -88,7 +88,7 @@ async def run(case: DefensorRequest) -> JSONResponse:
 
 
 @router.get(
-    "/reputacao/{termo}",
+    "/reputacao/{termo:path}",  # :path tolera barras no nome da empresa
     summary="Reputação da empresa no Consumidor.gov (dados abertos)",
 )
 async def reputacao(termo: str) -> JSONResponse:

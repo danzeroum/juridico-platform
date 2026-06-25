@@ -50,8 +50,8 @@ def slugify(texto: str) -> str:
 
 
 def parse_csv(content: str) -> list[dict]:
-    """Lê o CSV de reclamações (delimitado por ';')."""
-    return list(csv.DictReader(io.StringIO(content), delimiter=";"))
+    """Lê o CSV de reclamações (delimitado por ';'). Remove BOM, comum nos arquivos do portal."""
+    return list(csv.DictReader(io.StringIO(content.lstrip("﻿")), delimiter=";"))
 
 
 def aggregate_reclamacoes(rows: list[dict]) -> dict[str, dict]:

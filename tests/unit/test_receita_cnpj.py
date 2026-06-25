@@ -58,3 +58,15 @@ class TestFetchCnpj:
         with patch.object(receita_cnpj.requests, "get", return_value=_FakeResp(payload)):
             out = receita_cnpj.fetch_cnpj("00000000000191")
         assert out["data_abertura"] == "2005-03-15"
+
+    def test_situacao_baixada_nao_vira_ativa(self):
+        payload = {**_CNPJ_PAYLOAD, "descricao_situacao_cadastral": "Baixada"}
+        with patch.object(receita_cnpj.requests, "get", return_value=_FakeResp(payload)):
+            out = receita_cnpj.fetch_cnpj("00000000000191")
+        assert out["situacao_cadastral"] == "BAIXADA"
+
+    def test_situacao_desconhecida_nao_vira_ativa(self):
+        payload = {**_CNPJ_PAYLOAD, "descricao_situacao_cadastral": ""}
+        with patch.object(receita_cnpj.requests, "get", return_value=_FakeResp(payload)):
+            out = receita_cnpj.fetch_cnpj("00000000000191")
+        assert out["situacao_cadastral"] == "DESCONHECIDA"

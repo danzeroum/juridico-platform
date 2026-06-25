@@ -25,7 +25,12 @@ _SITUACOES = {"ATIVA", "BAIXADA", "INAPTA", "SUSPENSA", "NULA"}
 
 
 def _map_situacao(raw: str) -> str:
-    return raw.upper().strip() if raw.upper().strip() in _SITUACOES else "ATIVA"
+    """Normaliza a situação cadastral. NÃO assume ATIVA quando desconhecida —
+    devolver 'ATIVA' por engano marcaria como ativa uma empresa baixada/inapta."""
+    s = raw.upper().strip()
+    if s in _SITUACOES:
+        return s
+    return s or "DESCONHECIDA"
 
 
 def _parse_date(v: Any) -> str | None:
@@ -75,7 +80,7 @@ def fetch_cnpj(cnpj: str) -> dict:
     if len(digits) != 14:
         return {}
 
-    cb = get_circuit_breaker("receita")
+    cb = get_circuit_breaker("RECEITA")  # mesma chave do coletor batch (receita.py)
     if cb.is_open():
         logger.warning("CircuitBreaker Receita aberto — skip cnpj=%s", digits)
         return {}

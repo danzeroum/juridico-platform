@@ -46,6 +46,12 @@ class TestAggregate:
     def test_csv_vazio(self):
         assert cg.aggregate_reclamacoes([]) == {}
 
+    def test_csv_com_bom_ainda_agrega(self):
+        # Arquivos do portal costumam vir com BOM no início — não pode zerar a coleta.
+        agg = cg.aggregate_reclamacoes(cg.parse_csv("﻿" + _CSV))
+        assert "operadora-xyz" in agg
+        assert agg["operadora-xyz"]["total"] == 3
+
 
 class TestFetchEAgrega:
     def test_falha_degrada(self):

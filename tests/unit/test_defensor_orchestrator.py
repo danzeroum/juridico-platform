@@ -131,3 +131,15 @@ class TestRedacaoLLM:
             resp = run_agente(_req())
         assert resp.defesa_via == "template"
         assert mock_gen.call_count == 1  # curto-circuito após a 1ª falha
+
+    def test_llm_parcial_nao_rotula_llm(self):
+        # 1ª seção IA, demais falham → via "parcial" (não "llm"): proveniência honesta.
+        with patch("services.defensor.orchestrator.generate_text", side_effect=["IA sec1", None, None, None]):
+            resp = run_agente(_req())
+        assert resp.defesa_via == "parcial"
+        assert resp.secoes[0].conteudo == "IA sec1"
+
+    def test_tipocaso_alinhado_a_tipoacao(self):
+        # Guarda o mapeamento TipoCaso→TipoAcao em run_agente (evita ValueError/500).
+        from services.shared.contracts.petibot import TipoAcao
+        assert {t.value for t in TipoCaso} <= {t.value for t in TipoAcao}
