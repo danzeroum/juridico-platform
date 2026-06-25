@@ -1,13 +1,21 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, TrustHeader, FreshnessSeal,
   EmptyState, DegradationBanner, SkeletonCard,
 } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
+import { entidadeApi } from '@/lib/api/entidade'
 import { ArrowRight, Shield } from 'lucide-react'
 import { cn } from '@juridico/ui'
+
+function fmtDate(v?: string | null): string | null {
+  if (!v || v.length !== 10) return v ?? null
+  const [y, m, d] = v.split('-')
+  return `${d}/${m}/${y}`
+}
 
 // Mock entity data (real: GET /api/v1/entities/{cnpj})
 const MOCK_ENTITY = {
@@ -58,19 +66,45 @@ export default function EntidadePage() {
   const router = useRouter()
   const { demoMode } = useShell()
   const cnpj = typeof params.cnpj === 'string' ? decodeURIComponent(params.cnpj) : ''
+  const cnpjDigits = cnpj.replace(/\D/g, '')
 
+  const entidadeQuery = useQuery({
+    queryKey: ['entidade', cnpjDigits],
+    queryFn: () => entidadeApi.get(cnpjDigits),
+    enabled: !demoMode && cnpjDigits.length === 14,
+  })
+
+  // Loading / vazio no modo real (dados ao vivo da Receita)
   if (!demoMode) {
-    return (
-      <EmptyState
-        icon="🏢"
-        title="Nenhuma entidade carregada"
-        description="Pesquise um CNPJ na barra de busca acima."
-        demoMode
-      />
-    )
+    if (entidadeQuery.isLoading) return <SkeletonCard />
+    if (!entidadeQuery.data?.encontrado) {
+      return (
+        <div className="flex flex-col gap-4">
+          <DegradationBanner
+            message="Cadastro da Receita indisponível"
+            detail="Fonte CNPJ fora da allowlist de rede ou CNPJ não encontrado. Veja docs/NETWORK-ALLOWLIST.md."
+          />
+          <EmptyState icon="🏢" title="Nenhuma entidade carregada" description="Pesquise um CNPJ válido na barra de busca acima." />
+        </div>
+      )
+    }
   }
 
-  const entity = { ...MOCK_ENTITY, cnpj: cnpj || MOCK_ENTITY.cnpj }
+  const cad = entidadeQuery.data?.cadastro
+  const entity = demoMode
+    ? { ...MOCK_ENTITY, cnpj: cnpj || MOCK_ENTITY.cnpj }
+    : {
+        cnpj: cnpjDigits,
+        razaoSocial: cad?.razao_social || '—',
+        situacao: cad?.situacao_cadastral || '—',
+        cnae: [cad?.cnae_fiscal, cad?.cnae_descricao].filter(Boolean).join(' — ') || '—',
+        porte: cad?.porte || '—',
+        capital: cad?.capital_social != null
+          ? cad.capital_social.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+          : '—',
+        abertura: fmtDate(cad?.data_abertura) || '—',
+      }
+  const ativa = entity.situacao === 'ATIVA'
 
   return (
     <div className="flex flex-col gap-5">
@@ -87,7 +121,7 @@ export default function EntidadePage() {
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
               <h1 className="text-[20px] font-bold text-textPrimary">{entity.razaoSocial}</h1>
-              <Badge variant="LOW" dot>ATIVA</Badge>
+              <Badge variant={ativa ? 'LOW' : 'ALTO'} dot>{entity.situacao}</Badge>
             </div>
             <p className="font-mono text-[13px] text-textSecondary">{entity.cnpj}</p>
             <p className="text-[12px] text-textMuted">{entity.cnae}</p>
@@ -133,10 +167,12 @@ export default function EntidadePage() {
                   </span>
                   <ArrowRight className="w-3.5 h-3.5 text-textFaint" aria-hidden />
                 </div>
-                <div className="flex items-baseline gap-2 mb-1">
-                  <span className="font-mono text-[20px] font-bold text-textPrimary">{lens.summary}</span>
-                  <Badge variant={lens.variant}>{lens.label}</Badge>
-                </div>
+                {demoMode && (
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="font-mono text-[20px] font-bold text-textPrimary">{lens.summary}</span>
+                    <Badge variant={lens.variant}>{lens.label}</Badge>
+                  </div>
+                )}
                 <p className="text-[11px] text-textMuted">{lens.detail}</p>
                 <p className="text-[12px] font-semibold text-textSecondary mt-1">{lens.name}</p>
               </button>
