@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, ProbabilityDonut, HeuristicBadge,
   DegradationBanner, EmptyState, Textarea, Button, ViewerBanner, RbacGate,
@@ -50,6 +50,14 @@ export default function TaxPredictPage() {
     mutationFn: () => taxpredictApi.predict({ descricao, materia }),
   })
 
+  // Contexto macroeconômico real (IPCA) coletado ao vivo do IBGE.
+  const macroQuery = useQuery({
+    queryKey: ['taxpredict-macro'],
+    queryFn: () => taxpredictApi.macro(),
+    staleTime: 1000 * 60 * 60,
+  })
+  const ipca = macroQuery.data?.ipca
+
   const hasResult = demoMode || predictMutation.isSuccess
   const apiData = predictMutation.data
 
@@ -93,6 +101,33 @@ export default function TaxPredictPage() {
       </div>
 
       {role === 'viewer' && <ViewerBanner />}
+
+      {ipca && ipca.acumulado_12m != null && (
+        <Card padding="md">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-0.5">
+                Contexto macro · IPCA (IBGE)
+              </p>
+              <p className="font-mono text-[22px] font-bold text-textPrimary">
+                {ipca.acumulado_12m.toFixed(2).replace('.', ',')}%
+                <span className="text-[11px] font-normal text-textMuted ml-2">acum. 12m · ref. {ipca.referencia}</span>
+              </p>
+            </div>
+            <div className="flex items-end gap-1.5 h-12" aria-label="IPCA mensal recente">
+              {(ipca.mensal ?? []).map((m) => {
+                const h = Math.max(4, Math.min(48, Math.round(m.valor * 36)))
+                return (
+                  <div key={m.periodo} className="flex flex-col items-center gap-1" title={`${m.periodo}: ${m.valor}%`}>
+                    <div className="w-3 rounded-[2px] bg-accent" style={{ height: h }} />
+                    <span className="text-[8px] font-mono text-textFaint">{m.periodo.slice(5)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card padding="md" className="flex flex-col gap-4">
         <Textarea

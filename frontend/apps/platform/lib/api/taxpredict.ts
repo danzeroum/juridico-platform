@@ -31,7 +31,24 @@ export interface TaxPredictInput {
   ano_autuacao?: number
 }
 
+export interface IpcaMensal {
+  periodo: string
+  valor: number
+}
+
+export interface MacroResult {
+  ipca: {
+    acumulado_12m?: number
+    referencia?: string
+    mensal?: IpcaMensal[]
+  }
+  source: string
+  contract_version: string
+}
+
 export const taxpredictApi = {
   predict: (input: TaxPredictInput) =>
     api.post<TaxPredictResult>('/api/v1/taxpredict/predict', input),
+
+  macro: () => api.get<MacroResult>('/api/v1/taxpredict/macro'),
 }

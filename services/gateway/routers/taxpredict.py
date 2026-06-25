@@ -234,6 +234,44 @@ async def predict(case: TaxPredictRequest, request: Request) -> JSONResponse:
         return JSONResponse(content=response.model_dump(), status_code=200)
 
 
+@router.get(
+    "/macro",
+    summary="Contexto macroeconômico (IPCA) ao vivo do IBGE",
+    responses={
+        200: {
+            "description": "IPCA acumulado 12m + variação mensal recente (IBGE/SIDRA 1737)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "ipca": {
+                            "acumulado_12m": 4.72,
+                            "referencia": "2026-05",
+                            "mensal": [{"periodo": "2026-05", "valor": 0.58}],
+                        },
+                        "source": "IBGE",
+                        "contract_version": "taxpredict/v1",
+                    }
+                }
+            },
+        },
+    },
+)
+async def macro() -> JSONResponse:
+    """
+    Indicador macroeconômico real (IPCA) coletado ao vivo do IBGE.
+
+    Contexto para a leitura das predições tributárias. Degradação graciosa:
+    retorna ipca={} se o IBGE estiver indisponível.
+    """
+    from services.ingest.tasks.ibge import fetch_ipca
+
+    return JSONResponse(content={
+        "ipca": fetch_ipca(),
+        "source": "IBGE",
+        "contract_version": TAXPREDICT_CONTRACT_VERSION,
+    })
+
+
 class _noop_span:
     def __enter__(self): return None
     def __exit__(self, *_): pass

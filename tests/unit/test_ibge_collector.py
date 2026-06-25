@@ -72,3 +72,23 @@ class TestFetchPopulacao:
     def test_payload_inesperado_degrada(self):
         with patch.object(ibge.requests, "get", return_value=_FakeResp([])):
             assert ibge.fetch_populacao("5300108") == (None, None)
+
+
+_IPCA_12M = [{"resultados": [{"series": [{"serie": {"202605": "4.72"}}]}]}]
+_IPCA_MENSAL = [{"resultados": [{"series": [{"serie": {"202604": "0.67", "202605": "0.58"}}]}]}]
+
+
+class TestFetchIpca:
+    def test_parse_12m_e_mensal(self):
+        with patch.object(ibge.requests, "get", side_effect=[_FakeResp(_IPCA_12M), _FakeResp(_IPCA_MENSAL)]):
+            out = ibge.fetch_ipca()
+        assert out["acumulado_12m"] == 4.72
+        assert out["referencia"] == "2026-05"
+        assert out["mensal"] == [
+            {"periodo": "2026-04", "valor": 0.67},
+            {"periodo": "2026-05", "valor": 0.58},
+        ]
+
+    def test_falha_degrada_para_dict_vazio(self):
+        with patch.object(ibge.requests, "get", side_effect=TimeoutError("slow")):
+            assert ibge.fetch_ipca() == {}

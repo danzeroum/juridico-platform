@@ -38,6 +38,10 @@ IBGE_AGREGADOS = "https://servicodados.ibge.gov.br/api/v3"
 # Agregado 6579 = População residente estimada; variável 9324; nível N6 = Município.
 _POP_AGREGADO = "6579"
 _POP_VARIAVEL = "9324"
+# Agregado 1737 = IPCA; variável 63 = variação mensal; variável 2265 = acumulada 12m.
+_IPCA_AGREGADO = "1737"
+_IPCA_VAR_MENSAL = "63"
+_IPCA_VAR_12M = "2265"
 CACHE_TTL = 60 * 60 * 24 * 30  # 30 dias (dados anuais)
 
 
@@ -122,6 +126,52 @@ def fetch_populacao(cod_ibge: str) -> tuple[int | None, str | None]:
         cb.record_failure()
         logger.warning("Erro ao buscar população IBGE cod=%s: %s", cod_ibge, exc)
         return None, None
+
+
+def _fmt_periodo(p: str) -> str:
+    """Converte período SIDRA 'YYYYMM' em 'YYYY-MM'."""
+    return f"{p[:4]}-{p[4:6]}" if len(p) == 6 and p.isdigit() else p
+
+
+def _fetch_ipca_serie(variavel: str, periodos: str) -> dict[str, str]:
+    """Busca uma série do IPCA (agregado 1737) no nível Brasil. {} em falha."""
+    resp = requests.get(
+        f"{IBGE_AGREGADOS}/agregados/{_IPCA_AGREGADO}/periodos/{periodos}/variaveis/{variavel}",
+        params={"localidades": "N1[all]"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json()[0]["resultados"][0]["series"][0]["serie"]
+
+
+def fetch_ipca() -> dict:
+    """
+    IPCA (IBGE/SIDRA agregado 1737): acumulado em 12 meses + variação mensal recente.
+
+    Retorna {acumulado_12m, referencia, mensal:[{periodo, valor}]} ou {} em falha
+    (degradação graciosa). Indicador macro real para enriquecer o TaxPredict.
+    """
+    cb = get_circuit_breaker("ibge")
+    if cb.is_open():
+        return {}
+
+    try:
+        serie_12m = _fetch_ipca_serie(_IPCA_VAR_12M, "-1")
+        ref = max(serie_12m.keys())
+        acumulado = float(serie_12m[ref])
+
+        serie_mensal = _fetch_ipca_serie(_IPCA_VAR_MENSAL, "-6")
+        mensal = [
+            {"periodo": _fmt_periodo(k), "valor": float(v)}
+            for k, v in sorted(serie_mensal.items())
+            if v not in (None, "-", "...")
+        ]
+        cb.record_success()
+        return {"acumulado_12m": acumulado, "referencia": _fmt_periodo(ref), "mensal": mensal}
+    except Exception as exc:
+        cb.record_failure()
+        logger.warning("Erro ao buscar IPCA IBGE: %s", exc)
+        return {}
 
 
 def _ingest_ibge(uf: str, redis_client) -> dict:
