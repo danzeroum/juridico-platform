@@ -1,4 +1,4 @@
-.PHONY: help up down logs migrate test load-test backup health ingest-datajud ingest-caged ingest-all dash secrets-init
+.PHONY: help up down logs migrate test load-test backup health ingest-datajud ingest-caged ingest-ibge ingest-consumidor ingest-all dash secrets-init
 
 COMPOSE_FILES := -f docker-compose.yml
 
@@ -61,9 +61,20 @@ ingest-caged: ## Dispara ingest manual do CAGED
 	docker compose $(COMPOSE_FILES) exec celery-worker \
 		celery -A ingest.celery_app call ingest.tasks.caged.run_monthly_ingest
 
+UF ?= SP
+ingest-ibge: ## Dispara ingest manual do IBGE (use UF=XX; padrão SP)
+	docker compose $(COMPOSE_FILES) exec celery-worker \
+		celery -A ingest.celery_app call ingest.tasks.ibge.run_ingest --args='["$(UF)"]'
+
+CONSUMIDOR_URL ?=
+ingest-consumidor: ## Dispara ingest do Consumidor.gov (use CONSUMIDOR_URL=<csv>)
+	docker compose $(COMPOSE_FILES) exec celery-worker \
+		celery -A ingest.celery_app call ingest.tasks.consumidor_gov.run_ingest --args='["$(CONSUMIDOR_URL)"]'
+
 ingest-all: ## Dispara todos os ingests manualmente
 	@$(MAKE) ingest-datajud
 	@$(MAKE) ingest-caged
+	@$(MAKE) ingest-ibge
 	@echo "✅ Todos os ingests disparados"
 
 dash: ## Abre Grafana + Prometheus + Flower no browser

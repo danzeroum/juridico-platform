@@ -1,10 +1,14 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, VerifiableCitationChip, AntiHallucinationGuard,
   EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate, HeuristicBadge,
+  Skeleton,
 } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
+import { petibotApi } from '@/lib/api/petibot'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 
 const TIPOS = ['TRABALHISTA', 'CIVEL', 'TRIBUTARIO', 'PREVIDENCIARIO', 'ADMINISTRATIVO', 'CONSUMERISTA']
 
@@ -42,11 +46,47 @@ const MOCK_SECOES = [
   },
 ]
 
+interface SecaoView {
+  titulo: string
+  conteudo: string
+  precedentes: { doc_id: string; href: string; count: number }[]
+  precedentes_count: number
+}
+
 export default function PetiBotPage() {
   const { role, demoMode } = useShell()
-  const [hasResult, setHasResult] = useState(demoMode)
   const [descricao, setDescricao] = useState('')
   const [tipo, setTipo] = useState('TRABALHISTA')
+  const [poloAtivo, setPoloAtivo] = useState('')
+  const [poloPassivo, setPoloPassivo] = useState('')
+
+  const assembleMutation = useMutation({
+    mutationFn: () =>
+      petibotApi.assemble({
+        descricao,
+        tipo_acao: tipo,
+        polo_ativo: poloAtivo || 'Requerente',
+        polo_passivo: poloPassivo || 'Requerido',
+      }),
+  })
+
+  const hasResult = demoMode || assembleMutation.isSuccess
+  const apiData = assembleMutation.data
+
+  const secoes: SecaoView[] = demoMode
+    ? MOCK_SECOES
+    : apiData
+      ? apiData.secoes.map((s) => ({
+          titulo: s.titulo,
+          conteudo: s.conteudo,
+          precedentes: s.precedentes.map((id) => ({
+            doc_id: id,
+            href: `https://www.cnj.jus.br/datajud/${id}`,
+            count: 0,
+          })),
+          precedentes_count: s.precedentes.length,
+        }))
+      : []
 
   return (
     <div className="flex flex-col gap-5">
@@ -78,21 +118,30 @@ export default function PetiBotPage() {
               {TIPOS.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
-          <Input label="Polo ativo" placeholder="Nome do requerente" />
-          <Input label="Polo passivo" placeholder="Nome do requerido" />
+          <Input label="Polo ativo" placeholder="Nome do requerente" value={poloAtivo} onChange={(e) => setPoloAtivo(e.target.value)} />
+          <Input label="Polo passivo" placeholder="Nome do requerido" value={poloPassivo} onChange={(e) => setPoloPassivo(e.target.value)} />
         </div>
         <RbacGate role={role} requires="analyst">
-          <Button className="self-start" onClick={() => setHasResult(true)}>Montar peça</Button>
+          <Button className="self-start" onClick={() => assembleMutation.mutate()} loading={assembleMutation.isPending}>Montar peça</Button>
         </RbacGate>
       </Card>
 
-      {!hasResult && <EmptyState icon="📄" title="Preencha o formulário e clique em Montar peça" />}
+      <ApiErrorBanner error={assembleMutation.error} demoMode={demoMode} />
+
+      {assembleMutation.isPending && !demoMode && (
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton height={280} className="rounded-card col-span-2" />
+          <Skeleton height={280} className="rounded-card" />
+        </div>
+      )}
+
+      {!hasResult && !assembleMutation.isPending && <EmptyState icon="📄" title="Preencha o formulário e clique em Montar peça" />}
 
       {hasResult && (
         <div className="grid grid-cols-3 gap-4">
           {/* Editor */}
           <div className="col-span-2 flex flex-col gap-4">
-            {MOCK_SECOES.map((secao) => (
+            {secoes.map((secao) => (
               <Card key={secao.titulo} padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <SectionLabel>{secao.titulo}</SectionLabel>

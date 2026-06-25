@@ -17,6 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from services.gateway.observability import span as obs_span
 from services.shared.contracts.taxpredict import (
     PRIOR_CI_LOWER,
     PRIOR_CI_UPPER,
@@ -31,15 +32,6 @@ from services.shared.contracts.taxpredict import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# OTel — graceful degradation
-try:
-    from opentelemetry import trace as otel_trace
-    _tracer = otel_trace.get_tracer("taxpredict")
-    _OTEL = True
-except ImportError:
-    _OTEL = False
-    _tracer = None  # type: ignore[assignment]
 
 # Trace carregado uma vez no startup (lazy on first request); thread-safe reads.
 _MODEL_CACHE: dict[str, Any] = {}
@@ -182,12 +174,7 @@ async def predict(case: TaxPredictRequest, request: Request) -> JSONResponse:
     materia = case.materia.value
     features = extract_features(case)
 
-    ctx_manager = _tracer.start_as_current_span("taxpredict.predict") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("materia", materia)
-            span.set_attribute("descricao.len", len(case.descricao))
-
+    with obs_span("taxpredict.predict", {"materia": materia, "descricao.len": len(case.descricao)}):
         jurisprudencias = _rag_lookup(case.descricao, materia)
 
         model = _get_model(materia)
@@ -234,6 +221,41 @@ async def predict(case: TaxPredictRequest, request: Request) -> JSONResponse:
         return JSONResponse(content=response.model_dump(), status_code=200)
 
 
-class _noop_span:
-    def __enter__(self): return None
-    def __exit__(self, *_): pass
+@router.get(
+    "/macro",
+    summary="Contexto macroeconômico (IPCA) ao vivo do IBGE",
+    responses={
+        200: {
+            "description": "IPCA acumulado 12m + variação mensal recente (IBGE/SIDRA 1737)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "ipca": {
+                            "acumulado_12m": 4.72,
+                            "referencia": "2026-05",
+                            "mensal": [{"periodo": "2026-05", "valor": 0.58}],
+                        },
+                        "source": "IBGE",
+                        "contract_version": "taxpredict/v1",
+                    }
+                }
+            },
+        },
+    },
+)
+async def macro() -> JSONResponse:
+    """
+    Indicador macroeconômico real (IPCA) coletado ao vivo do IBGE.
+
+    Contexto para a leitura das predições tributárias. Degradação graciosa:
+    retorna ipca={} se o IBGE estiver indisponível.
+    """
+    from services.ingest.tasks.bcb import fetch_macro
+    from services.ingest.tasks.ibge import fetch_ipca
+
+    return JSONResponse(content={
+        "ipca": fetch_ipca(),          # IBGE (liberado)
+        "bcb": fetch_macro(),          # SELIC/câmbio — {} enquanto api.bcb.gov.br bloqueado
+        "source": "IBGE+BCB",
+        "contract_version": TAXPREDICT_CONTRACT_VERSION,
+    })

@@ -10,9 +10,7 @@ import {
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
 import { legalscoreApi } from '@/lib/api/legalscore'
-import { ApiError } from '@/lib/api/client'
-import { ProblemJsonError } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, LineChart, Line, Area, AreaChart, Tooltip } from 'recharts'
 import { Upload, RefreshCw } from 'lucide-react'
 
@@ -62,7 +60,7 @@ export default function LegalScorePage() {
   const result = demoMode
     ? {
         score: simulateDegraded ? 521 : 648,
-        risk_level: (simulateDegraded ? 'MODERADO' : 'MODERADO') as const,
+        risk_level: 'MODERADO' as const,
         confidence_interval: simulateDegraded ? [460, 590] : [610, 689] as [number, number],
         breakdown: MOCK_BREAKDOWN,
         engine: 'rust' as const,
@@ -128,9 +126,7 @@ export default function LegalScorePage() {
       </Card>
 
       {/* Error */}
-      {scoreMutation.isError && scoreMutation.error instanceof ApiError && (
-        <ProblemJsonError error={scoreMutation.error.problem as ProblemJson} />
-      )}
+      <ApiErrorBanner error={scoreMutation.error} />
 
       {/* Empty state */}
       {!hasResult && !scoreMutation.isPending && (

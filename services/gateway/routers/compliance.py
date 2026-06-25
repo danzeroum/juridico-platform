@@ -20,17 +20,9 @@ from fastapi.responses import JSONResponse
 
 from services.compliance.monitor import build_indicadores_from_cache, evaluate_municipio
 from services.compliance.rules import ALERT_RULES
+from services.gateway.observability import span as obs_span
 
 router = APIRouter()
-
-# OTel — graceful degradation
-try:
-    from opentelemetry import trace as otel_trace
-    _tracer = otel_trace.get_tracer("compliance")
-    _OTEL = True
-except ImportError:
-    _OTEL = False
-    _tracer = None  # type: ignore[assignment]
 
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -96,8 +88,13 @@ def _build_summary(cod_ibge: str, r) -> dict:
     )
     alerts = evaluate_municipio(ind)
 
+    ibge = _cached(r, f"ibge:{cod_ibge}") or {}
+
     return {
         "cod_ibge": cod_ibge,
+        "municipio": ibge.get("municipio"),
+        "uf": ibge.get("uf"),
+        "populacao": ibge.get("populacao"),
         "referencia": ref,
         "indicadores": {
             "delta_arrecadacao_yoy": ind.delta_arrecadacao_yoy,
@@ -167,8 +164,10 @@ async def list_municipalities(
     """Lista municípios monitorados com indicadores de compliance."""
     try:
         r = _get_redis()
-        keys = r.keys("snis:*")
-        ibge_codes = sorted({k.split(":")[1] for k in keys if ":" in k})
+        # Universo de municípios monitorados: SNIS (saneamento) ∪ IBGE (seed real).
+        codes: set[str] = {k.split(":")[1] for k in r.keys("snis:*") if ":" in k}
+        codes |= {k.split(":")[1] for k in r.keys("ibge:*") if ":" in k}
+        ibge_codes = sorted(codes)
 
         if uf:
             uf_upper = uf.upper()
@@ -176,7 +175,8 @@ async def list_municipalities(
             for code in ibge_codes:
                 data = _cached(r, f"snis:{code}")
                 entry = data[0] if isinstance(data, list) and data else data
-                if entry and entry.get("uf") == uf_upper:
+                code_uf = (entry or {}).get("uf") or (_cached(r, f"ibge:{code}") or {}).get("uf")
+                if code_uf == uf_upper:
                     filtered.append(code)
             ibge_codes = filtered
 
@@ -254,10 +254,7 @@ async def municipality_detail(ibge_code: str) -> JSONResponse:
             status_code=400,
             detail=_ibge_error(ibge_code, f"/api/v1/compliance/municipality/{ibge_code}"),
         )
-    ctx_manager = _tracer.start_as_current_span("compliance.municipality_detail") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("ibge_code", ibge_code)
+    with obs_span("compliance.municipality_detail", {"ibge_code": ibge_code}):
         try:
             r = _get_redis()
             summary = _build_summary(ibge_code, r)
@@ -363,6 +360,121 @@ async def evaluate_municipality(ibge_code: str) -> JSONResponse:
         ) from exc
 
 
-class _noop_span:
-    def __enter__(self): return None
-    def __exit__(self, *_): pass
+@router.get(
+    "/uf/{uf}/municipios",
+    summary="Lista municípios de uma UF ao vivo do IBGE",
+    responses={
+        200: {
+            "description": "Municípios da UF coletados direto do IBGE (servicodados.ibge.gov.br)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "uf": "DF", "total": 1,
+                        "municipios": [{"cod_ibge": "5300108", "municipio": "Brasília", "uf": "DF"}],
+                        "source": "IBGE", "contract_version": "compliance/v1",
+                    }
+                }
+            },
+        },
+    },
+)
+async def list_uf_municipios(uf: str) -> JSONResponse:
+    """Lista municípios de uma UF coletados ao vivo do IBGE (degradação graciosa: lista vazia)."""
+    if not uf.isalpha() or len(uf) != 2:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "type": "https://juridico.io/errors/uf-invalida",
+                "title": "UF inválida",
+                "status": 400,
+                "detail": "uf deve conter exatamente 2 letras (ex.: SP).",
+                "instance": f"/api/v1/compliance/uf/{uf}/municipios",
+                "contract_version": "compliance/v1",
+            },
+        )
+    from services.ingest.tasks.ibge import fetch_municipios
+
+    municipios = fetch_municipios(uf)
+    return JSONResponse(content={
+        "uf": uf.upper(),
+        "total": len(municipios),
+        "municipios": municipios,
+        "source": "IBGE",
+        "contract_version": "compliance/v1",
+    })
+
+
+@router.get(
+    "/municipio/{cod_ibge}/populacao",
+    summary="População residente estimada (IBGE) de um município",
+)
+async def municipio_populacao(cod_ibge: str) -> JSONResponse:
+    """População residente estimada do município, coletada ao vivo do IBGE (SIDRA 6579)."""
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        raise HTTPException(
+            status_code=400,
+            detail=_ibge_error(cod_ibge, f"/api/v1/compliance/municipio/{cod_ibge}/populacao"),
+        )
+    from services.ingest.tasks.ibge import fetch_populacao
+
+    populacao, ano = fetch_populacao(cod_ibge)
+    return JSONResponse(content={
+        "cod_ibge": cod_ibge,
+        "populacao": populacao,
+        "ano": ano,
+        "source": "IBGE",
+        "contract_version": "compliance/v1",
+    })
+
+
+@router.get(
+    "/municipio/{cod_ibge}/perfil",
+    summary="Perfil socioeconômico (IBGE) de um município",
+)
+async def municipio_perfil(cod_ibge: str) -> JSONResponse:
+    """
+    Perfil socioeconômico do município coletado ao vivo do IBGE:
+    população estimada, PIB a preços correntes e PIB per capita derivado.
+    """
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        raise HTTPException(
+            status_code=400,
+            detail=_ibge_error(cod_ibge, f"/api/v1/compliance/municipio/{cod_ibge}/perfil"),
+        )
+    from services.ingest.tasks.ibge import (
+        fetch_area,
+        fetch_cempre,
+        fetch_pib,
+        fetch_populacao,
+    )
+
+    populacao, pop_ano = fetch_populacao(cod_ibge)
+    pib_mil, pib_ano = fetch_pib(cod_ibge)
+    pib_reais = pib_mil * 1000 if pib_mil is not None else None
+    pib_per_capita = (
+        round(pib_reais / populacao, 2) if pib_reais and populacao else None
+    )
+    cempre = fetch_cempre(cod_ibge)
+    area_km2, area_ano = fetch_area(cod_ibge)
+    densidade = (
+        round(populacao / area_km2, 2) if populacao and area_km2 else None
+    )
+    return JSONResponse(content={
+        "cod_ibge": cod_ibge,
+        "populacao": populacao,
+        "populacao_ano": pop_ano,
+        "pib_reais": pib_reais,
+        "pib_ano": pib_ano,
+        "pib_per_capita": pib_per_capita,
+        "empresas": cempre.get("empresas"),
+        "pessoal_ocupado": cempre.get("pessoal_ocupado"),
+        "pessoal_assalariado": cempre.get("pessoal_assalariado"),
+        "cempre_ano": cempre.get("ano"),
+        "area_km2": area_km2,
+        "area_ano": area_ano,
+        "densidade_demografica": densidade,
+        "source": "IBGE",
+        "contract_version": "compliance/v1",
+    })
+
+

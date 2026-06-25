@@ -23,6 +23,8 @@ node_modules/
 .next/
 out/
 .turbo/
+pnpm-lock.yaml
+*.tsbuildinfo
 
 # Docker
 data/

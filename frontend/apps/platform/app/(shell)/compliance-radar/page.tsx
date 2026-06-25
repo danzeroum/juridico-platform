@@ -1,10 +1,15 @@
 'use client'
 import { useState } from 'react'
-import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button } from '@juridico/ui'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button, Skeleton } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
+import { complianceApi } from '@/lib/api/compliance'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 import { Tabs, TabPanel } from '@juridico/ui'
 import type { AlertItem } from '@juridico/ui'
+
+const PERFIL_IBGE = '1302603' // Manaus/AM
 
 const UF_DATA = [
   { uf: 'SP', severity: 'LOW' as const }, { uf: 'RJ', severity: 'HIGH' as const },
@@ -54,6 +59,25 @@ export default function ComplianceRadarPage() {
   const [activeTab, setActiveTab] = useState('cartograma')
   const [selectedUf, setSelectedUf] = useState<string | null>(null)
 
+  const [selectedMun, setSelectedMun] = useState<{ cod: string; nome: string } | null>(null)
+
+  const evalMutation = useMutation({
+    mutationFn: () => complianceApi.evaluate(PERFIL_IBGE),
+  })
+
+  // Coleta ao vivo do IBGE — municípios da UF selecionada no cartograma.
+  const municipiosQuery = useQuery({
+    queryKey: ['ibge-municipios', selectedUf],
+    queryFn: () => complianceApi.municipios(selectedUf as string),
+    enabled: !!selectedUf,
+  })
+
+  const perfilQuery = useQuery({
+    queryKey: ['ibge-perfil', selectedMun?.cod],
+    queryFn: () => complianceApi.perfil(selectedMun!.cod),
+    enabled: !!selectedMun,
+  })
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-3">
@@ -84,7 +108,7 @@ export default function ComplianceRadarPage() {
                     key={d.uf}
                     role="group"
                     aria-label={`${d.uf}: ${d.severity}`}
-                    onClick={() => setSelectedUf(d.uf)}
+                    onClick={() => { setSelectedUf(d.uf); setSelectedMun(null); setActiveTab('municipios') }}
                     className="h-10 rounded-[6px] flex items-center justify-center text-white text-[10px] font-bold transition-transform hover:scale-110"
                     style={{ background: SEVERITY_COLORS[d.severity] }}
                     title={`${d.uf}: ${d.severity}`}
@@ -126,11 +150,22 @@ export default function ComplianceRadarPage() {
         <Card padding="md" className="mt-4 flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-mono text-[12px] text-textMuted">IBGE: 1302603</p>
+              <p className="font-mono text-[12px] text-textMuted">IBGE: {PERFIL_IBGE}</p>
               <h2 className="text-[17px] font-bold text-textPrimary">Manaus / AM</h2>
             </div>
-            <Button variant="secondary" size="sm">Avaliar regras agora</Button>
+            <div className="flex items-center gap-3">
+              {evalMutation.isSuccess && (
+                <Badge variant={evalMutation.data.rules_fired > 0 ? 'ALTO' : 'LOW'}>
+                  {evalMutation.data.rules_fired} regra(s) disparada(s)
+                </Badge>
+              )}
+              <Button variant="secondary" size="sm" loading={evalMutation.isPending} onClick={() => evalMutation.mutate()}>
+                Avaliar regras agora
+              </Button>
+            </div>
           </div>
+
+          <ApiErrorBanner error={evalMutation.error} />
           <div className="grid grid-cols-3 gap-3">
             {MOCK_INDICATORS.map((ind) => (
               <div key={ind.label} className="bg-surfaceMuted rounded-card p-3">
@@ -154,7 +189,95 @@ export default function ComplianceRadarPage() {
 
       <TabPanel id="municipios" activeTab={activeTab}>
         <Card padding="md" className="mt-4">
-          <EmptyState icon="🏘️" title="Lista de municípios" description="Selecione uma UF no cartograma para filtrar municípios." />
+          {!selectedUf && (
+            <EmptyState icon="🏘️" title="Lista de municípios" description="Selecione uma UF no cartograma — os municípios são coletados ao vivo do IBGE." />
+          )}
+
+          {selectedUf && municipiosQuery.isLoading && <Skeleton height={240} className="rounded-card" />}
+
+          <ApiErrorBanner error={municipiosQuery.error} />
+
+          {selectedUf && municipiosQuery.data && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <SectionLabel>Municípios de {selectedUf} · {municipiosQuery.data.total}</SectionLabel>
+                <FreshnessSeal source="IBGE" lagDays={0} band="fresh" />
+              </div>
+              <div className="grid grid-cols-3 gap-2 max-h-[420px] overflow-y-auto pr-1">
+                {municipiosQuery.data.municipios.map((m) => (
+                  <button
+                    key={m.cod_ibge}
+                    onClick={() => setSelectedMun({ cod: m.cod_ibge, nome: m.municipio })}
+                    className={`flex flex-col items-start gap-0.5 rounded-[6px] border px-3 py-2 text-left transition-colors ${selectedMun?.cod === m.cod_ibge ? 'border-accent bg-accentTintBg' : 'border-borderStrong hover:bg-surfaceMuted'}`}
+                  >
+                    <span className="text-[12px] font-medium text-textPrimary">{m.municipio}</span>
+                    <span className="font-mono text-[10px] text-textMuted">IBGE {m.cod_ibge}</span>
+                  </button>
+                ))}
+              </div>
+
+              {selectedMun && (
+                <div className="mt-1 rounded-card bg-surfaceMuted p-4">
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-2">{selectedMun.nome} · perfil IBGE</p>
+                  {perfilQuery.isLoading && <span className="text-[12px] text-textMuted">Consultando IBGE…</span>}
+                  {perfilQuery.data && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">População estimada {perfilQuery.data.populacao_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.populacao != null ? perfilQuery.data.populacao.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">PIB {perfilQuery.data.pib_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.pib_reais != null
+                            ? perfilQuery.data.pib_reais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 })
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">PIB per capita</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.pib_per_capita != null
+                            ? perfilQuery.data.pib_per_capita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Empresas atuantes {perfilQuery.data.cempre_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.empresas != null ? perfilQuery.data.empresas.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Pessoal ocupado {perfilQuery.data.cempre_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.pessoal_ocupado != null ? perfilQuery.data.pessoal_ocupado.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Área territorial</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.area_km2 != null
+                            ? `${perfilQuery.data.area_km2.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} km²`
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Densidade demográfica</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.densidade_demografica != null
+                            ? `${perfilQuery.data.densidade_demografica.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} hab/km²`
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </TabPanel>
 

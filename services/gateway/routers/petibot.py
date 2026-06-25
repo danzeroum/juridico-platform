@@ -11,20 +11,12 @@ import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from services.gateway.observability import span as obs_span
 from services.petibot.assembler import assemble_petition
 from services.shared.contracts.petibot import PetiRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# OTel — graceful degradation
-try:
-    from opentelemetry import trace as otel_trace
-    _tracer = otel_trace.get_tracer("petibot")
-    _OTEL = True
-except ImportError:
-    _OTEL = False
-    _tracer = None  # type: ignore[assignment]
 
 
 @router.post(
@@ -72,14 +64,6 @@ async def assemble(case: PetiRequest) -> JSONResponse:
     Fase 4: retorna template (sem geração LLM).
     Precedentes via ChromaDB; degradação graciosa se offline.
     """
-    ctx_manager = _tracer.start_as_current_span("petibot.assemble") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("tipo_acao", case.tipo_acao.value)
+    with obs_span("petibot.assemble", {"tipo_acao": case.tipo_acao.value}):
         response = assemble_petition(case)
         return JSONResponse(content=response.model_dump(), status_code=200)
-
-
-class _noop_span:
-    def __enter__(self): return None
-    def __exit__(self, *_): pass

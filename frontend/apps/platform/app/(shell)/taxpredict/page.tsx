@@ -1,12 +1,14 @@
 'use client'
 import { useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, ProbabilityDonut, HeuristicBadge,
   DegradationBanner, EmptyState, Textarea, Button, ViewerBanner, RbacGate,
-  VerifiableCitationChip,
+  VerifiableCitationChip, Skeleton,
 } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell } from 'recharts'
+import { taxpredictApi } from '@/lib/api/taxpredict'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 
 const MATERIAS = ['PIS_COFINS', 'IRPJ', 'CSLL', 'ICMS', 'IPI', 'ISS', 'SIMPLES']
 
@@ -42,11 +44,49 @@ export default function TaxPredictPage() {
   const [descricao, setDescricao] = useState('')
   const [materia, setMateria] = useState('PIS_COFINS')
   const [showFallback, setShowFallback] = useState(false)
-  const [hasResult, setHasResult] = useState(demoMode)
 
-  const result = showFallback
-    ? { ...MOCK_RESULT, probability: 0.30, ci_lower: 0.20, ci_upper: 0.42, is_fallback: true }
-    : MOCK_RESULT
+  const predictMutation = useMutation({
+    mutationFn: () => taxpredictApi.predict({ descricao, materia }),
+  })
+
+  // Contexto macroeconômico real (IPCA) coletado ao vivo do IBGE.
+  const macroQuery = useQuery({
+    queryKey: ['taxpredict-macro'],
+    queryFn: () => taxpredictApi.macro(),
+    staleTime: 1000 * 60 * 60,
+  })
+  const ipca = macroQuery.data?.ipca
+  const bcb = macroQuery.data?.bcb
+
+  const hasResult = demoMode || predictMutation.isSuccess
+  const apiData = predictMutation.data
+
+  const result = demoMode
+    ? (showFallback
+        ? { ...MOCK_RESULT, probability: 0.30, ci_lower: 0.20, ci_upper: 0.42, is_fallback: true }
+        : MOCK_RESULT)
+    : apiData
+      ? {
+          probability: apiData.probability,
+          ci_lower: apiData.ci_lower,
+          ci_upper: apiData.ci_upper,
+          model_status: 'heuristica' as const,
+          is_fallback: apiData.is_fallback,
+          shap: Object.entries(apiData.features_used).map(([name, value]) => ({
+            name,
+            impact: 0,
+            label: `${name}: ${value}`,
+          })),
+          jurisprudencias: apiData.jurisprudencias.map((j) => ({
+            doc_id: j.doc_id,
+            similarity: j.similarity,
+            tribunal: j.tribunal ?? '—',
+            ano: j.ano ?? 0,
+            decisao: j.decisao,
+            ementa: j.ementa,
+          })),
+        }
+      : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -61,6 +101,47 @@ export default function TaxPredictPage() {
       </div>
 
       {role === 'viewer' && <ViewerBanner />}
+
+      {ipca && ipca.acumulado_12m != null && (
+        <Card padding="md">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-0.5">
+                Contexto macro · IPCA (IBGE)
+              </p>
+              <p className="font-mono text-[22px] font-bold text-textPrimary">
+                {ipca.acumulado_12m.toFixed(2).replace('.', ',')}%
+                <span className="text-[11px] font-normal text-textMuted ml-2">acum. 12m · ref. {ipca.referencia}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {bcb?.selic != null && (
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-0.5">SELIC meta</p>
+                  <p className="font-mono text-[18px] font-bold text-textPrimary">{bcb.selic.toFixed(2).replace('.', ',')}%</p>
+                </div>
+              )}
+              {bcb?.cambio_usd != null && (
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-0.5">USD</p>
+                  <p className="font-mono text-[18px] font-bold text-textPrimary">R$ {bcb.cambio_usd.toFixed(2).replace('.', ',')}</p>
+                </div>
+              )}
+              <div className="flex items-end gap-1.5 h-12" aria-label="IPCA mensal recente">
+                {(ipca.mensal ?? []).map((m) => {
+                  const h = Math.max(4, Math.min(48, Math.round(m.valor * 36)))
+                  return (
+                    <div key={m.periodo} className="flex flex-col items-center gap-1" title={`${m.periodo}: ${m.valor}%`}>
+                      <div className="w-3 rounded-[2px] bg-accent" style={{ height: h }} />
+                      <span className="text-[8px] font-mono text-textFaint">{m.periodo.slice(5)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card padding="md" className="flex flex-col gap-4">
         <Textarea
@@ -83,14 +164,25 @@ export default function TaxPredictPage() {
             </select>
           </div>
           <RbacGate role={role} requires="analyst">
-            <Button onClick={() => setHasResult(true)}>Prever desfecho</Button>
+            <Button onClick={() => predictMutation.mutate()} loading={predictMutation.isPending}>
+              Prever desfecho
+            </Button>
           </RbacGate>
         </div>
       </Card>
 
-      {!hasResult && <EmptyState icon="⚖️" title="Preencha o formulário e clique em Prever desfecho" />}
+      <ApiErrorBanner error={predictMutation.error} demoMode={demoMode} />
 
-      {hasResult && (
+      {predictMutation.isPending && !demoMode && (
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton height={200} className="rounded-card" />
+          <Skeleton height={200} className="rounded-card col-span-2" />
+        </div>
+      )}
+
+      {!hasResult && !predictMutation.isPending && <EmptyState icon="⚖️" title="Preencha o formulário e clique em Prever desfecho" />}
+
+      {hasResult && result && (
         <div className="flex flex-col gap-4">
           {result.is_fallback && (
             <DegradationBanner

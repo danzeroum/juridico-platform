@@ -1,10 +1,21 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, SettlementRangeBar, DegradationBanner,
-  EmptyState, Input, Button, ViewerBanner, RbacGate,
+  EmptyState, Input, Textarea, Button, ViewerBanner, RbacGate, Skeleton,
 } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
+import { conciliaApi } from '@/lib/api/concilia'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
+
+function riskBand(score: number | null | undefined): string {
+  if (score == null) return 'MODERADO'
+  if (score >= 700) return 'LOW'
+  if (score >= 500) return 'MODERADO'
+  if (score >= 350) return 'ALTO'
+  return 'CRITICO'
+}
 
 const MOCK_RESULT = {
   valor_minimo: 75000,
@@ -23,10 +34,45 @@ const MOCK_RESULT = {
 
 export default function ConciliaIAPage() {
   const { role, demoMode } = useShell()
-  const [hasResult, setHasResult] = useState(demoMode)
   const [tipo, setTipo] = useState('TRABALHISTA')
   const [valor, setValor] = useState('')
   const [cnpjReu, setCnpjReu] = useState('')
+  const [descricao, setDescricao] = useState('')
+
+  const recommendMutation = useMutation({
+    mutationFn: () =>
+      conciliaApi.recommend({
+        descricao: descricao || 'Análise de viabilidade de acordo para a ação informada.',
+        valor_causa: Number(valor.replace(/[^\d.]/g, '')) || 0,
+        tipo_acao: tipo,
+        cnpj_reu: cnpjReu.replace(/\D/g, '') || undefined,
+      }),
+  })
+
+  const hasResult = demoMode || recommendMutation.isSuccess
+  const apiData = recommendMutation.data
+
+  const result = demoMode
+    ? {
+        valor_minimo: MOCK_RESULT.valor_minimo,
+        valor_sugerido: MOCK_RESULT.valor_sugerido,
+        valor_maximo: MOCK_RESULT.valor_maximo,
+        pct: MOCK_RESULT.percentual_causa,
+        risco_reu: MOCK_RESULT.risco_reu,
+        prob: MOCK_RESULT.probabilidade_procedencia as number | null,
+        fatores: MOCK_RESULT.fatores,
+      }
+    : apiData
+      ? {
+          valor_minimo: apiData.valor_minimo,
+          valor_sugerido: apiData.valor_sugerido,
+          valor_maximo: apiData.valor_maximo,
+          pct: Math.round(apiData.percentual_causa * 100),
+          risco_reu: riskBand(apiData.risco_reu),
+          prob: apiData.probabilidade_procedencia ?? null,
+          fatores: apiData.fatores,
+        }
+      : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -39,6 +85,14 @@ export default function ConciliaIAPage() {
       {role === 'viewer' && <ViewerBanner />}
 
       <Card padding="md" className="flex flex-col gap-4">
+        <Textarea
+          label="Descrição da disputa"
+          placeholder="Descreva os fatos e o objeto da ação (20–2.000 caracteres)…"
+          rows={3}
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          charCount={{ current: descricao.length, max: 2000 }}
+        />
         <div className="grid grid-cols-3 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[12px] font-medium text-textSecondary">Tipo de ação</label>
@@ -54,32 +108,43 @@ export default function ConciliaIAPage() {
           <Input label="CNPJ do réu" placeholder="00.000.000/0000-00" mono value={cnpjReu} onChange={(e) => setCnpjReu(e.target.value)} />
         </div>
         <RbacGate role={role} requires="analyst">
-          <Button onClick={() => setHasResult(true)} className="self-start">Recomendar acordo</Button>
+          <Button onClick={() => recommendMutation.mutate()} loading={recommendMutation.isPending} className="self-start">
+            Recomendar acordo
+          </Button>
         </RbacGate>
       </Card>
 
-      {!hasResult && <EmptyState icon="🤝" title="Preencha o formulário e clique em Recomendar acordo" />}
+      <ApiErrorBanner error={recommendMutation.error} demoMode={demoMode} />
 
-      {hasResult && (
+      {recommendMutation.isPending && !demoMode && (
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton height={220} className="rounded-card" />
+          <Skeleton height={220} className="rounded-card" />
+        </div>
+      )}
+
+      {!hasResult && !recommendMutation.isPending && <EmptyState icon="🤝" title="Preencha o formulário e clique em Recomendar acordo" />}
+
+      {hasResult && result && (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4">
             <Card padding="md">
               <SectionLabel className="mb-4">Faixa de acordo recomendada</SectionLabel>
               <SettlementRangeBar
-                min={MOCK_RESULT.valor_minimo}
-                suggested={MOCK_RESULT.valor_sugerido}
-                max={MOCK_RESULT.valor_maximo}
-                pctOfCase={MOCK_RESULT.percentual_causa}
+                min={result.valor_minimo}
+                suggested={result.valor_sugerido}
+                max={result.valor_maximo}
+                pctOfCase={result.pct}
               />
               <div className="mt-4 flex gap-3">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] text-textSectionLabel uppercase tracking-[0.04em]">Risco do réu</span>
-                  <Badge variant={MOCK_RESULT.risco_reu as any} dot>{MOCK_RESULT.risco_reu}</Badge>
+                  <Badge variant={result.risco_reu as any} dot>{result.risco_reu}</Badge>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[10px] text-textSectionLabel uppercase tracking-[0.04em]">Prob. procedência</span>
                   <span className="font-mono text-[18px] font-bold text-textPrimary">
-                    {Math.round(MOCK_RESULT.probabilidade_procedencia * 100)}%
+                    {result.prob != null ? `${Math.round(result.prob * 100)}%` : '—'}
                   </span>
                 </div>
               </div>
@@ -89,7 +154,7 @@ export default function ConciliaIAPage() {
             <Card padding="md">
               <SectionLabel className="mb-4">Fatores de ajuste</SectionLabel>
               <div className="flex flex-col gap-3">
-                {MOCK_RESULT.fatores.map((f) => (
+                {result.fatores.map((f) => (
                   <div key={f.nome} className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[12px] text-textPrimary font-medium">{f.nome}</span>
