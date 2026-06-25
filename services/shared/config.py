@@ -97,5 +97,27 @@ class _Settings:
     def LLM_MODEL_LOCAL(self) -> str:
         return os.getenv("LLM_MODEL_LOCAL", "llama3:8b")
 
+    # --- Automação de protocolo (Defensor) ---
+    # Padrão "simulacao": nunca submete de verdade. "real" exige credenciais + host liberado.
+    @property
+    def PROTOCOLO_MODO(self) -> str:
+        return os.getenv("PROTOCOLO_MODO", "simulacao")
+
+    @property
+    def CONSUMIDOR_GOV_USER(self) -> str:
+        return load_secret("consumidor_gov_user") or os.getenv("CONSUMIDOR_GOV_USER", "")
+
+    @property
+    def CONSUMIDOR_GOV_PASSWORD(self) -> str:
+        return load_secret("consumidor_gov_password") or os.getenv("CONSUMIDOR_GOV_PASSWORD", "")
+
+    @property
+    def PROCON_SP_USER(self) -> str:
+        return load_secret("procon_sp_user") or os.getenv("PROCON_SP_USER", "")
+
+    @property
+    def PROCON_SP_PASSWORD(self) -> str:
+        return load_secret("procon_sp_password") or os.getenv("PROCON_SP_PASSWORD", "")
+
 
 settings = _Settings()

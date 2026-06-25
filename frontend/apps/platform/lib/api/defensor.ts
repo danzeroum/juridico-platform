@@ -49,10 +49,35 @@ export interface ReputacaoResult {
   contract_version: string
 }
 
+export interface ProtocoloInput {
+  canal: string
+  reclamante: string
+  reclamada: string
+  cnpj_reclamada?: string
+  resumo: string
+  defesa?: string
+  valor?: number
+  anexos?: string[]
+}
+
+export interface ProtocoloResult {
+  canal: string
+  modo: string
+  status: string
+  numero_protocolo: string | null
+  url: string | null
+  mensagem: string
+  enviado_em: string
+  contract_version: string
+}
+
 export const defensorApi = {
   run: (input: DefensorInput) =>
     api.post<DefensorResult>('/api/v1/defensor/run', input),
 
   reputacao: (termo: string) =>
     api.get<ReputacaoResult>(`/api/v1/defensor/reputacao/${encodeURIComponent(termo)}`),
+
+  protocolar: (input: ProtocoloInput) =>
+    api.post<ProtocoloResult>('/api/v1/defensor/protocolar', input),
 }
