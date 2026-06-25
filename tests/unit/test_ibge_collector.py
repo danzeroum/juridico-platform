@@ -1,9 +1,20 @@
 """Testes do coletor IBGE (parsing puro, sem rede — requests mockado)."""
 from __future__ import annotations
 
+import json
 from unittest.mock import patch
 
 from services.ingest.tasks import ibge
+
+
+class _FakeRedis:
+    """Stub mínimo de Redis para testar persistência sem infraestrutura."""
+
+    def __init__(self):
+        self.store: dict[str, str] = {}
+
+    def setex(self, key, ttl, value):
+        self.store[key] = value
 
 
 class _FakeResp:
@@ -140,6 +151,22 @@ class TestFetchCempre:
     def test_falha_degrada_para_vazio(self):
         with patch.object(ibge.requests, "get", side_effect=ConnectionError("x")):
             assert ibge.fetch_cempre("5300108") == {}
+
+
+class TestIngestIbge:
+    def test_persiste_silver_por_municipio(self):
+        municipios = [{"cod_ibge": "5300108", "municipio": "Brasília", "uf": "DF"}]
+        with patch.object(ibge, "fetch_municipios", return_value=municipios), \
+             patch.object(ibge, "fetch_populacao", return_value=(2996899, "2025")):
+            redis = _FakeRedis()
+            recon = ibge._ingest_ibge("DF", redis)
+
+        assert recon["records_out"] == 1
+        assert "ibge:5300108" in redis.store
+        saved = json.loads(redis.store["ibge:5300108"])
+        assert saved["municipio"] == "Brasília"
+        assert saved["uf"] == "DF"
+        assert saved["populacao"] == 2996899
 
 
 _IPCA_12M = [{"resultados": [{"series": [{"serie": {"202605": "4.72"}}]}]}]

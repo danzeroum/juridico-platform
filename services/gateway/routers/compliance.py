@@ -96,8 +96,13 @@ def _build_summary(cod_ibge: str, r) -> dict:
     )
     alerts = evaluate_municipio(ind)
 
+    ibge = _cached(r, f"ibge:{cod_ibge}") or {}
+
     return {
         "cod_ibge": cod_ibge,
+        "municipio": ibge.get("municipio"),
+        "uf": ibge.get("uf"),
+        "populacao": ibge.get("populacao"),
         "referencia": ref,
         "indicadores": {
             "delta_arrecadacao_yoy": ind.delta_arrecadacao_yoy,
@@ -167,8 +172,10 @@ async def list_municipalities(
     """Lista municípios monitorados com indicadores de compliance."""
     try:
         r = _get_redis()
-        keys = r.keys("snis:*")
-        ibge_codes = sorted({k.split(":")[1] for k in keys if ":" in k})
+        # Universo de municípios monitorados: SNIS (saneamento) ∪ IBGE (seed real).
+        codes: set[str] = {k.split(":")[1] for k in r.keys("snis:*") if ":" in k}
+        codes |= {k.split(":")[1] for k in r.keys("ibge:*") if ":" in k}
+        ibge_codes = sorted(codes)
 
         if uf:
             uf_upper = uf.upper()
@@ -176,7 +183,8 @@ async def list_municipalities(
             for code in ibge_codes:
                 data = _cached(r, f"snis:{code}")
                 entry = data[0] if isinstance(data, list) and data else data
-                if entry and entry.get("uf") == uf_upper:
+                code_uf = (entry or {}).get("uf") or (_cached(r, f"ibge:{code}") or {}).get("uf")
+                if code_uf == uf_upper:
                     filtered.append(code)
             ibge_codes = filtered
 
