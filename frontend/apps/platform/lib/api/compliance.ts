@@ -41,6 +41,9 @@ export interface PerfilResponse {
   pessoal_ocupado: number | null
   pessoal_assalariado: number | null
   cempre_ano: string | null
+  area_km2: number | null
+  area_ano: string | null
+  densidade_demografica: number | null
   source: string
   contract_version: string
 }

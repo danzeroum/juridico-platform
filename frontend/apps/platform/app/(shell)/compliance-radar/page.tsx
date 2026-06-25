@@ -261,6 +261,22 @@ export default function ComplianceRadarPage() {
                           {perfilQuery.data.pessoal_ocupado != null ? perfilQuery.data.pessoal_ocupado.toLocaleString('pt-BR') : '—'}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Área territorial</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.area_km2 != null
+                            ? `${perfilQuery.data.area_km2.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} km²`
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Densidade demográfica</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.densidade_demografica != null
+                            ? `${perfilQuery.data.densidade_demografica.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} hab/km²`
+                            : '—'}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

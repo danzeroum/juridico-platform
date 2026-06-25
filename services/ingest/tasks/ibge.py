@@ -49,6 +49,9 @@ _PIB_VARIAVEL = "37"
 _CEMPRE_AGREGADO = "1685"
 _CEMPRE_VARS = "367|707|708"  # empresas atuantes, pessoal ocupado total, assalariado
 _CEMPRE_MAP = {"367": "empresas", "707": "pessoal_ocupado", "708": "pessoal_assalariado"}
+# Agregado 1301 = Área e densidade; variável 615 = área total (km²).
+_AREA_AGREGADO = "1301"
+_AREA_VARIAVEL = "615"
 CACHE_TTL = 60 * 60 * 24 * 30  # 30 dias (dados anuais)
 
 
@@ -160,6 +163,29 @@ def fetch_pib(cod_ibge: str) -> tuple[float | None, str | None]:
     except Exception as exc:
         cb.record_failure()
         logger.warning("Erro ao buscar PIB IBGE cod=%s: %s", cod_ibge, exc)
+        return None, None
+
+
+def fetch_area(cod_ibge: str) -> tuple[float | None, str | None]:
+    """
+    Área territorial do município em km² (IBGE/SIDRA agregado 1301, variável 615).
+
+    Retorna (area_km2, ano) ou (None, None) em falha/ausência.
+    """
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        return None, None
+
+    cb = get_circuit_breaker("ibge")
+    if cb.is_open():
+        return None, None
+
+    try:
+        valor, ano = _fetch_n6_latest(cod_ibge, _AREA_AGREGADO, _AREA_VARIAVEL)
+        cb.record_success()
+        return (float(valor) if valor is not None else None), ano
+    except Exception as exc:
+        cb.record_failure()
+        logger.warning("Erro ao buscar área IBGE cod=%s: %s", cod_ibge, exc)
         return None, None
 
 

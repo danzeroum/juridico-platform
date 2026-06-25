@@ -94,6 +94,26 @@ class TestFetchPib:
             assert ibge.fetch_pib("5300108") == (None, None)
 
 
+_AREA_PAYLOAD = [{"resultados": [{"series": [{"serie": {"2010": "11401.1"}}]}]}]
+
+
+class TestFetchArea:
+    def test_parse_area(self):
+        with patch.object(ibge.requests, "get", return_value=_FakeResp(_AREA_PAYLOAD)):
+            area, ano = ibge.fetch_area("1302603")
+        assert area == 11401.1
+        assert ano == "2010"
+
+    def test_cod_invalido_nao_chama_rede(self):
+        with patch.object(ibge.requests, "get") as mock_get:
+            assert ibge.fetch_area("99") == (None, None)
+            mock_get.assert_not_called()
+
+    def test_falha_degrada(self):
+        with patch.object(ibge.requests, "get", side_effect=ConnectionError("x")):
+            assert ibge.fetch_area("5300108") == (None, None)
+
+
 _CEMPRE_PAYLOAD = [
     {"id": "367", "resultados": [{"series": [{"serie": {"2021": "28737"}}]}]},
     {"id": "707", "resultados": [{"series": [{"serie": {"2021": "554913"}}]}]},
