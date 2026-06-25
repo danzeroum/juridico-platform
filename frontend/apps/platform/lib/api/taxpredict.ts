@@ -42,6 +42,12 @@ export interface MacroResult {
     referencia?: string
     mensal?: IpcaMensal[]
   }
+  bcb?: {
+    selic?: number
+    selic_data?: string
+    cambio_usd?: number
+    cambio_data?: string
+  }
   source: string
   contract_version: string
 }

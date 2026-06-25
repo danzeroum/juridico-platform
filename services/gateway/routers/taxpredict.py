@@ -263,11 +263,13 @@ async def macro() -> JSONResponse:
     Contexto para a leitura das predições tributárias. Degradação graciosa:
     retorna ipca={} se o IBGE estiver indisponível.
     """
+    from services.ingest.tasks.bcb import fetch_macro
     from services.ingest.tasks.ibge import fetch_ipca
 
     return JSONResponse(content={
-        "ipca": fetch_ipca(),
-        "source": "IBGE",
+        "ipca": fetch_ipca(),          # IBGE (liberado)
+        "bcb": fetch_macro(),          # SELIC/câmbio — {} enquanto api.bcb.gov.br bloqueado
+        "source": "IBGE+BCB",
         "contract_version": TAXPREDICT_CONTRACT_VERSION,
     })
 

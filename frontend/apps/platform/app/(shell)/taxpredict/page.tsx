@@ -57,6 +57,7 @@ export default function TaxPredictPage() {
     staleTime: 1000 * 60 * 60,
   })
   const ipca = macroQuery.data?.ipca
+  const bcb = macroQuery.data?.bcb
 
   const hasResult = demoMode || predictMutation.isSuccess
   const apiData = predictMutation.data
@@ -114,16 +115,30 @@ export default function TaxPredictPage() {
                 <span className="text-[11px] font-normal text-textMuted ml-2">acum. 12m · ref. {ipca.referencia}</span>
               </p>
             </div>
-            <div className="flex items-end gap-1.5 h-12" aria-label="IPCA mensal recente">
-              {(ipca.mensal ?? []).map((m) => {
-                const h = Math.max(4, Math.min(48, Math.round(m.valor * 36)))
-                return (
-                  <div key={m.periodo} className="flex flex-col items-center gap-1" title={`${m.periodo}: ${m.valor}%`}>
-                    <div className="w-3 rounded-[2px] bg-accent" style={{ height: h }} />
-                    <span className="text-[8px] font-mono text-textFaint">{m.periodo.slice(5)}</span>
-                  </div>
-                )
-              })}
+            <div className="flex items-center gap-4">
+              {bcb?.selic != null && (
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-0.5">SELIC meta</p>
+                  <p className="font-mono text-[18px] font-bold text-textPrimary">{bcb.selic.toFixed(2).replace('.', ',')}%</p>
+                </div>
+              )}
+              {bcb?.cambio_usd != null && (
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-0.5">USD</p>
+                  <p className="font-mono text-[18px] font-bold text-textPrimary">R$ {bcb.cambio_usd.toFixed(2).replace('.', ',')}</p>
+                </div>
+              )}
+              <div className="flex items-end gap-1.5 h-12" aria-label="IPCA mensal recente">
+                {(ipca.mensal ?? []).map((m) => {
+                  const h = Math.max(4, Math.min(48, Math.round(m.valor * 36)))
+                  return (
+                    <div key={m.periodo} className="flex flex-col items-center gap-1" title={`${m.periodo}: ${m.valor}%`}>
+                      <div className="w-3 rounded-[2px] bg-accent" style={{ height: h }} />
+                      <span className="text-[8px] font-mono text-textFaint">{m.periodo.slice(5)}</span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </Card>
