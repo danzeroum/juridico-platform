@@ -45,6 +45,10 @@ _IPCA_VAR_12M = "2265"
 # Agregado 5938 = PIB dos municípios; variável 37 = PIB a preços correntes (Mil Reais).
 _PIB_AGREGADO = "5938"
 _PIB_VARIAVEL = "37"
+# Agregado 1685 = CEMPRE (Cadastro Central de Empresas).
+_CEMPRE_AGREGADO = "1685"
+_CEMPRE_VARS = "367|707|708"  # empresas atuantes, pessoal ocupado total, assalariado
+_CEMPRE_MAP = {"367": "empresas", "707": "pessoal_ocupado", "708": "pessoal_assalariado"}
 CACHE_TTL = 60 * 60 * 24 * 30  # 30 dias (dados anuais)
 
 
@@ -157,6 +161,47 @@ def fetch_pib(cod_ibge: str) -> tuple[float | None, str | None]:
         cb.record_failure()
         logger.warning("Erro ao buscar PIB IBGE cod=%s: %s", cod_ibge, exc)
         return None, None
+
+
+def fetch_cempre(cod_ibge: str) -> dict:
+    """
+    Tecido empresarial do município (IBGE/CEMPRE agregado 1685): número de
+    empresas atuantes, pessoal ocupado total e assalariado.
+
+    Retorna {empresas, pessoal_ocupado, pessoal_assalariado, ano} ou {} em falha.
+    """
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        return {}
+
+    cb = get_circuit_breaker("ibge")
+    if cb.is_open():
+        return {}
+
+    try:
+        resp = requests.get(
+            f"{IBGE_AGREGADOS}/agregados/{_CEMPRE_AGREGADO}/periodos/-1/variaveis/{_CEMPRE_VARS}",
+            params={"localidades": f"N6[{cod_ibge}]"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        cb.record_success()
+        out: dict = {}
+        ano: str | None = None
+        for var in resp.json():
+            key = _CEMPRE_MAP.get(str(var.get("id")))
+            if not key:
+                continue
+            serie = var["resultados"][0]["series"][0]["serie"]
+            ano = max(serie.keys())
+            valor = serie[ano]
+            out[key] = int(valor) if valor not in (None, "-", "...") else None
+        if ano:
+            out["ano"] = ano
+        return out
+    except Exception as exc:
+        cb.record_failure()
+        logger.warning("Erro ao buscar CEMPRE IBGE cod=%s: %s", cod_ibge, exc)
+        return {}
 
 
 def _fmt_periodo(p: str) -> str:

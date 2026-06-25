@@ -249,6 +249,18 @@ export default function ComplianceRadarPage() {
                             : '—'}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Empresas atuantes {perfilQuery.data.cempre_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.empresas != null ? perfilQuery.data.empresas.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">Pessoal ocupado {perfilQuery.data.cempre_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.pessoal_ocupado != null ? perfilQuery.data.pessoal_ocupado.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

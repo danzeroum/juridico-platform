@@ -94,6 +94,34 @@ class TestFetchPib:
             assert ibge.fetch_pib("5300108") == (None, None)
 
 
+_CEMPRE_PAYLOAD = [
+    {"id": "367", "resultados": [{"series": [{"serie": {"2021": "28737"}}]}]},
+    {"id": "707", "resultados": [{"series": [{"serie": {"2021": "554913"}}]}]},
+    {"id": "708", "resultados": [{"series": [{"serie": {"2021": "519130"}}]}]},
+]
+
+
+class TestFetchCempre:
+    def test_parse_multivariavel(self):
+        with patch.object(ibge.requests, "get", return_value=_FakeResp(_CEMPRE_PAYLOAD)):
+            out = ibge.fetch_cempre("1302603")
+        assert out == {
+            "empresas": 28737,
+            "pessoal_ocupado": 554913,
+            "pessoal_assalariado": 519130,
+            "ano": "2021",
+        }
+
+    def test_cod_invalido_nao_chama_rede(self):
+        with patch.object(ibge.requests, "get") as mock_get:
+            assert ibge.fetch_cempre("1") == {}
+            mock_get.assert_not_called()
+
+    def test_falha_degrada_para_vazio(self):
+        with patch.object(ibge.requests, "get", side_effect=ConnectionError("x")):
+            assert ibge.fetch_cempre("5300108") == {}
+
+
 _IPCA_12M = [{"resultados": [{"series": [{"serie": {"202605": "4.72"}}]}]}]
 _IPCA_MENSAL = [{"resultados": [{"series": [{"serie": {"202604": "0.67", "202605": "0.58"}}]}]}]
 

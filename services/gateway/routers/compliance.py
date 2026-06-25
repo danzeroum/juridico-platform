@@ -444,7 +444,7 @@ async def municipio_perfil(cod_ibge: str) -> JSONResponse:
             status_code=400,
             detail=_ibge_error(cod_ibge, f"/api/v1/compliance/municipio/{cod_ibge}/perfil"),
         )
-    from services.ingest.tasks.ibge import fetch_pib, fetch_populacao
+    from services.ingest.tasks.ibge import fetch_cempre, fetch_pib, fetch_populacao
 
     populacao, pop_ano = fetch_populacao(cod_ibge)
     pib_mil, pib_ano = fetch_pib(cod_ibge)
@@ -452,6 +452,7 @@ async def municipio_perfil(cod_ibge: str) -> JSONResponse:
     pib_per_capita = (
         round(pib_reais / populacao, 2) if pib_reais and populacao else None
     )
+    cempre = fetch_cempre(cod_ibge)
     return JSONResponse(content={
         "cod_ibge": cod_ibge,
         "populacao": populacao,
@@ -459,6 +460,10 @@ async def municipio_perfil(cod_ibge: str) -> JSONResponse:
         "pib_reais": pib_reais,
         "pib_ano": pib_ano,
         "pib_per_capita": pib_per_capita,
+        "empresas": cempre.get("empresas"),
+        "pessoal_ocupado": cempre.get("pessoal_ocupado"),
+        "pessoal_assalariado": cempre.get("pessoal_assalariado"),
+        "cempre_ano": cempre.get("ano"),
         "source": "IBGE",
         "contract_version": "compliance/v1",
     })

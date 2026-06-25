@@ -37,6 +37,10 @@ export interface PerfilResponse {
   pib_reais: number | null
   pib_ano: string | null
   pib_per_capita: number | null
+  empresas: number | null
+  pessoal_ocupado: number | null
+  pessoal_assalariado: number | null
+  cempre_ano: string | null
   source: string
   contract_version: string
 }
