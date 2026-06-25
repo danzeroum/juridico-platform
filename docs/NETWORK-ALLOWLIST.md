@@ -32,7 +32,7 @@ de autenticação e a cadência.
 | 3 | `apidatalake.tesouro.gov.br` | 443 | **ContabilIA / ComplianceRadar** (SICONFI — contas públicas) | `services/ingest/tasks/siconfi.py` ✅ pronto | nenhuma | mensal | ⛔ não testado |
 | 4 | `api.dados.gov.br` | 443 | **ContabilIA / ComplianceRadar** (CAGED — emprego) | `services/ingest/tasks/caged.py` ✅ pronto | chave dados.gov | mensal | ⛔ 403 |
 | 5 | `publica.cnpj.ws` | 443 | **LegalScore / Entidade** (cadastro CNPJ) | `services/ingest/tasks/receita_cnpj.py` ✅ pronto (`GET /api/v1/entidade/{cnpj}`) | nenhuma | on-demand | ⛔ não liberado |
-| 6 | `consumidor.gov.br` | 443 | **Defensor** (dados abertos de reclamações; referência) | ❌ a criar | nenhuma (CSV bulk) | semanal | ⛔ 403 |
+| 6 | `consumidor.gov.br` | 443 | **Defensor** (reputação por empresa via dados abertos) | `services/ingest/tasks/consumidor_gov.py` ✅ pronto (`GET /api/v1/defensor/reputacao/{termo}`) | nenhuma (CSV bulk) | semanal | ⛔ 403 |
 | 7 | `api.bcb.gov.br` | 443 | **TaxPredict** (SELIC/câmbio — macro além do IPCA) | ❌ a criar (`fetch_*` no padrão IBGE) | nenhuma | diária | ⛔ 403 |
 | — | `servicodados.ibge.gov.br` | 443 | **ComplianceRadar / TaxPredict** (já em uso) | `services/ingest/tasks/ibge.py` ✅ | nenhuma | anual | ✅ liberado |
 | — | `hooks.slack.com` *(opcional)* | 443 | Entrega de alertas (outbox → Slack) | `compliance/licitawatch` | webhook URL | evento | ⛔ não testado |

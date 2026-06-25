@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Card, SectionLabel, Badge, VerifiableCitationChip, AntiHallucinationGuard,
   EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate, Skeleton, ProblemJsonError,
@@ -94,6 +94,14 @@ export default function DefensorPage() {
 
   const hasResult = demoMode || runMutation.isSuccess
   const apiData = runMutation.data
+
+  // Reputação real da empresa reclamada (Consumidor.gov, via cache de dados abertos).
+  const reputacaoQuery = useQuery({
+    queryKey: ['defensor-reputacao', reclamada],
+    queryFn: () => defensorApi.reputacao(reclamada),
+    enabled: !demoMode && reclamada.trim().length >= 3,
+  })
+  const reputacao = reputacaoQuery.data?.encontrado ? reputacaoQuery.data.reputacao : null
 
   const eventos = demoMode || !apiData
     ? MOCK_EVENTOS
@@ -258,6 +266,27 @@ export default function DefensorPage() {
               </div>
               <p className="text-[11px] text-textMuted mt-1">{precedentesIndexados} precedentes indexados</p>
             </Card>
+
+            {reputacao && (
+              <Card padding="md">
+                <SectionLabel className="mb-2">Reputação · Consumidor.gov</SectionLabel>
+                <p className="text-[12px] font-medium text-textPrimary mb-2">{reputacao.empresa}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <p className="text-[10px] text-textMuted">Reclamações</p>
+                    <p className="font-mono text-[16px] font-bold text-textPrimary">{(reputacao.total ?? 0).toLocaleString('pt-BR')}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-textMuted">Resolução</p>
+                    <p className="font-mono text-[16px] font-bold text-textPrimary">{reputacao.pct_resolucao != null ? `${Math.round(reputacao.pct_resolucao * 100)}%` : '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-textMuted">Nota média</p>
+                    <p className="font-mono text-[16px] font-bold text-textPrimary">{reputacao.nota_media != null ? reputacao.nota_media.toFixed(1).replace('.', ',') : '—'}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-.PHONY: help up down logs migrate test load-test backup health ingest-datajud ingest-caged ingest-ibge ingest-all dash secrets-init
+.PHONY: help up down logs migrate test load-test backup health ingest-datajud ingest-caged ingest-ibge ingest-consumidor ingest-all dash secrets-init
 
 COMPOSE_FILES := -f docker-compose.yml
 
@@ -65,6 +65,11 @@ UF ?= SP
 ingest-ibge: ## Dispara ingest manual do IBGE (use UF=XX; padrão SP)
 	docker compose $(COMPOSE_FILES) exec celery-worker \
 		celery -A ingest.celery_app call ingest.tasks.ibge.run_ingest --args='["$(UF)"]'
+
+CONSUMIDOR_URL ?=
+ingest-consumidor: ## Dispara ingest do Consumidor.gov (use CONSUMIDOR_URL=<csv>)
+	docker compose $(COMPOSE_FILES) exec celery-worker \
+		celery -A ingest.celery_app call ingest.tasks.consumidor_gov.run_ingest --args='["$(CONSUMIDOR_URL)"]'
 
 ingest-all: ## Dispara todos os ingests manualmente
 	@$(MAKE) ingest-datajud

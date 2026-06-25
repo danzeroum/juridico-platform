@@ -12,7 +12,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from services.defensor.orchestrator import run_agente
-from services.shared.contracts.defensor import DefensorRequest
+from services.shared.contracts.defensor import DEFENSOR_CONTRACT_VERSION, DefensorRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -85,6 +85,45 @@ async def run(case: DefensorRequest) -> JSONResponse:
             span.set_attribute("tipo_caso", case.tipo_caso.value)
         response = run_agente(case)
         return JSONResponse(content=response.model_dump(), status_code=200)
+
+
+@router.get(
+    "/reputacao/{termo}",
+    summary="Reputação da empresa no Consumidor.gov (dados abertos)",
+)
+async def reputacao(termo: str) -> JSONResponse:
+    """
+    Indicadores de reputação da empresa reclamada agregados do Consumidor.gov
+    (total de reclamações, % resposta, % resolução, nota média).
+
+    Lê o cache populado pelo ingest (`make ingest-consumidor`). Retorna
+    encontrado=false enquanto não houver dados (degradação graciosa).
+    """
+    import json
+    import os
+
+    from services.ingest.tasks.consumidor_gov import slugify
+
+    slug = slugify(termo)
+    raw = None
+    try:
+        import redis as redis_lib
+
+        r = redis_lib.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"), decode_responses=True
+        )
+        raw = r.get(f"consumidor:{slug}")
+    except Exception as exc:
+        logger.debug("Redis indisponível para reputação Defensor: %s", exc)
+
+    data = json.loads(raw) if raw else {}
+    return JSONResponse(content={
+        "termo": termo,
+        "encontrado": bool(data),
+        "reputacao": data,
+        "source": "Consumidor.gov",
+        "contract_version": DEFENSOR_CONTRACT_VERSION,
+    })
 
 
 class _noop_span:

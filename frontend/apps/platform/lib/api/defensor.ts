@@ -32,7 +32,26 @@ export interface DefensorInput {
   valor?: number
 }
 
+export interface ReputacaoResult {
+  termo: string
+  encontrado: boolean
+  reputacao: {
+    empresa?: string
+    total?: number
+    respondidas?: number
+    resolvidas?: number
+    pct_resposta?: number
+    pct_resolucao?: number
+    nota_media?: number | null
+  }
+  source: string
+  contract_version: string
+}
+
 export const defensorApi = {
   run: (input: DefensorInput) =>
     api.post<DefensorResult>('/api/v1/defensor/run', input),
+
+  reputacao: (termo: string) =>
+    api.get<ReputacaoResult>(`/api/v1/defensor/reputacao/${encodeURIComponent(termo)}`),
 }
