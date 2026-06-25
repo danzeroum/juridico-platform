@@ -363,6 +363,73 @@ async def evaluate_municipality(ibge_code: str) -> JSONResponse:
         ) from exc
 
 
+@router.get(
+    "/uf/{uf}/municipios",
+    summary="Lista municípios de uma UF ao vivo do IBGE",
+    responses={
+        200: {
+            "description": "Municípios da UF coletados direto do IBGE (servicodados.ibge.gov.br)",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "uf": "DF", "total": 1,
+                        "municipios": [{"cod_ibge": "5300108", "municipio": "Brasília", "uf": "DF"}],
+                        "source": "IBGE", "contract_version": "compliance/v1",
+                    }
+                }
+            },
+        },
+    },
+)
+async def list_uf_municipios(uf: str) -> JSONResponse:
+    """Lista municípios de uma UF coletados ao vivo do IBGE (degradação graciosa: lista vazia)."""
+    if not uf.isalpha() or len(uf) != 2:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "type": "https://juridico.io/errors/uf-invalida",
+                "title": "UF inválida",
+                "status": 400,
+                "detail": "uf deve conter exatamente 2 letras (ex.: SP).",
+                "instance": f"/api/v1/compliance/uf/{uf}/municipios",
+                "contract_version": "compliance/v1",
+            },
+        )
+    from services.ingest.tasks.ibge import fetch_municipios
+
+    municipios = fetch_municipios(uf)
+    return JSONResponse(content={
+        "uf": uf.upper(),
+        "total": len(municipios),
+        "municipios": municipios,
+        "source": "IBGE",
+        "contract_version": "compliance/v1",
+    })
+
+
+@router.get(
+    "/municipio/{cod_ibge}/populacao",
+    summary="População residente estimada (IBGE) de um município",
+)
+async def municipio_populacao(cod_ibge: str) -> JSONResponse:
+    """População residente estimada do município, coletada ao vivo do IBGE (SIDRA 6579)."""
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        raise HTTPException(
+            status_code=400,
+            detail=_ibge_error(cod_ibge, f"/api/v1/compliance/municipio/{cod_ibge}/populacao"),
+        )
+    from services.ingest.tasks.ibge import fetch_populacao
+
+    populacao, ano = fetch_populacao(cod_ibge)
+    return JSONResponse(content={
+        "cod_ibge": cod_ibge,
+        "populacao": populacao,
+        "ano": ano,
+        "source": "IBGE",
+        "contract_version": "compliance/v1",
+    })
+
+
 class _noop_span:
     def __enter__(self): return None
     def __exit__(self, *_): pass

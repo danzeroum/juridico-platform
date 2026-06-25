@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button, ProblemJsonError } from '@juridico/ui'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button, ProblemJsonError, Skeleton } from '@juridico/ui'
 import type { ProblemJson } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
@@ -60,8 +60,23 @@ export default function ComplianceRadarPage() {
   const [activeTab, setActiveTab] = useState('cartograma')
   const [selectedUf, setSelectedUf] = useState<string | null>(null)
 
+  const [selectedMun, setSelectedMun] = useState<{ cod: string; nome: string } | null>(null)
+
   const evalMutation = useMutation({
     mutationFn: () => complianceApi.evaluate(PERFIL_IBGE),
+  })
+
+  // Coleta ao vivo do IBGE — municípios da UF selecionada no cartograma.
+  const municipiosQuery = useQuery({
+    queryKey: ['ibge-municipios', selectedUf],
+    queryFn: () => complianceApi.municipios(selectedUf as string),
+    enabled: !!selectedUf,
+  })
+
+  const populacaoQuery = useQuery({
+    queryKey: ['ibge-populacao', selectedMun?.cod],
+    queryFn: () => complianceApi.populacao(selectedMun!.cod),
+    enabled: !!selectedMun,
   })
 
   return (
@@ -94,7 +109,7 @@ export default function ComplianceRadarPage() {
                     key={d.uf}
                     role="group"
                     aria-label={`${d.uf}: ${d.severity}`}
-                    onClick={() => setSelectedUf(d.uf)}
+                    onClick={() => { setSelectedUf(d.uf); setSelectedMun(null); setActiveTab('municipios') }}
                     className="h-10 rounded-[6px] flex items-center justify-center text-white text-[10px] font-bold transition-transform hover:scale-110"
                     style={{ background: SEVERITY_COLORS[d.severity] }}
                     title={`${d.uf}: ${d.severity}`}
@@ -177,7 +192,49 @@ export default function ComplianceRadarPage() {
 
       <TabPanel id="municipios" activeTab={activeTab}>
         <Card padding="md" className="mt-4">
-          <EmptyState icon="🏘️" title="Lista de municípios" description="Selecione uma UF no cartograma para filtrar municípios." />
+          {!selectedUf && (
+            <EmptyState icon="🏘️" title="Lista de municípios" description="Selecione uma UF no cartograma — os municípios são coletados ao vivo do IBGE." />
+          )}
+
+          {selectedUf && municipiosQuery.isLoading && <Skeleton height={240} className="rounded-card" />}
+
+          {selectedUf && municipiosQuery.isError && municipiosQuery.error instanceof ApiError && (
+            <ProblemJsonError error={municipiosQuery.error.problem as ProblemJson} />
+          )}
+
+          {selectedUf && municipiosQuery.data && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <SectionLabel>Municípios de {selectedUf} · {municipiosQuery.data.total}</SectionLabel>
+                <FreshnessSeal source="IBGE" lagDays={0} band="fresh" />
+              </div>
+              <div className="grid grid-cols-3 gap-2 max-h-[420px] overflow-y-auto pr-1">
+                {municipiosQuery.data.municipios.map((m) => (
+                  <button
+                    key={m.cod_ibge}
+                    onClick={() => setSelectedMun({ cod: m.cod_ibge, nome: m.municipio })}
+                    className={`flex flex-col items-start gap-0.5 rounded-[6px] border px-3 py-2 text-left transition-colors ${selectedMun?.cod === m.cod_ibge ? 'border-accent bg-accentTintBg' : 'border-borderStrong hover:bg-surfaceMuted'}`}
+                  >
+                    <span className="text-[12px] font-medium text-textPrimary">{m.municipio}</span>
+                    <span className="font-mono text-[10px] text-textMuted">IBGE {m.cod_ibge}</span>
+                  </button>
+                ))}
+              </div>
+
+              {selectedMun && (
+                <div className="mt-1 rounded-card bg-surfaceMuted p-4">
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-1">{selectedMun.nome}</p>
+                  {populacaoQuery.isLoading && <span className="text-[12px] text-textMuted">Consultando IBGE…</span>}
+                  {populacaoQuery.data && (
+                    <p className="font-mono text-[20px] font-bold text-textPrimary">
+                      {populacaoQuery.data.populacao != null ? populacaoQuery.data.populacao.toLocaleString('pt-BR') : '—'}
+                      <span className="text-[11px] font-normal text-textMuted ml-2">hab. · pop. estimada {populacaoQuery.data.ano ?? ''}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </TabPanel>
 
