@@ -74,6 +74,26 @@ class TestFetchPopulacao:
             assert ibge.fetch_populacao("5300108") == (None, None)
 
 
+_PIB_PAYLOAD = [{"resultados": [{"series": [{"serie": {"2022": "110000000", "2023": "127649795"}}]}]}]
+
+
+class TestFetchPib:
+    def test_pega_ano_mais_recente(self):
+        with patch.object(ibge.requests, "get", return_value=_FakeResp(_PIB_PAYLOAD)):
+            pib, ano = ibge.fetch_pib("1302603")
+        assert pib == 127649795.0
+        assert ano == "2023"
+
+    def test_cod_invalido_nao_chama_rede(self):
+        with patch.object(ibge.requests, "get") as mock_get:
+            assert ibge.fetch_pib("12") == (None, None)
+            mock_get.assert_not_called()
+
+    def test_falha_degrada(self):
+        with patch.object(ibge.requests, "get", side_effect=ConnectionError("x")):
+            assert ibge.fetch_pib("5300108") == (None, None)
+
+
 _IPCA_12M = [{"resultados": [{"series": [{"serie": {"202605": "4.72"}}]}]}]
 _IPCA_MENSAL = [{"resultados": [{"series": [{"serie": {"202604": "0.67", "202605": "0.58"}}]}]}]
 

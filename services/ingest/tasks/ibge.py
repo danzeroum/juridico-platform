@@ -42,6 +42,9 @@ _POP_VARIAVEL = "9324"
 _IPCA_AGREGADO = "1737"
 _IPCA_VAR_MENSAL = "63"
 _IPCA_VAR_12M = "2265"
+# Agregado 5938 = PIB dos municípios; variável 37 = PIB a preços correntes (Mil Reais).
+_PIB_AGREGADO = "5938"
+_PIB_VARIAVEL = "37"
 CACHE_TTL = 60 * 60 * 24 * 30  # 30 dias (dados anuais)
 
 
@@ -96,6 +99,20 @@ def fetch_municipios(uf: str) -> list[dict]:
         return []
 
 
+def _fetch_n6_latest(cod_ibge: str, agregado: str, variavel: str) -> tuple[str | None, str | None]:
+    """Último valor de uma série SIDRA para um município (nível N6). (valor_str|None, ano|None)."""
+    resp = requests.get(
+        f"{IBGE_AGREGADOS}/agregados/{agregado}/periodos/-1/variaveis/{variavel}",
+        params={"localidades": f"N6[{cod_ibge}]"},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    serie = resp.json()[0]["resultados"][0]["series"][0]["serie"]
+    ano = max(serie.keys())
+    valor = serie[ano]
+    return (valor if valor not in (None, "-", "...") else None), ano
+
+
 def fetch_populacao(cod_ibge: str) -> tuple[int | None, str | None]:
     """
     População residente estimada de um município (SIDRA agregado 6579).
@@ -110,21 +127,35 @@ def fetch_populacao(cod_ibge: str) -> tuple[int | None, str | None]:
         return None, None
 
     try:
-        resp = requests.get(
-            f"{IBGE_AGREGADOS}/agregados/{_POP_AGREGADO}/periodos/-1/variaveis/{_POP_VARIAVEL}",
-            params={"localidades": f"N6[{cod_ibge}]"},
-            timeout=30,
-        )
-        resp.raise_for_status()
+        valor, ano = _fetch_n6_latest(cod_ibge, _POP_AGREGADO, _POP_VARIAVEL)
         cb.record_success()
-        data = resp.json()
-        serie = data[0]["resultados"][0]["series"][0]["serie"]
-        ano = max(serie.keys())
-        valor = serie[ano]
-        return (int(valor) if valor not in (None, "-", "...") else None), ano
+        return (int(valor) if valor is not None else None), ano
     except Exception as exc:
         cb.record_failure()
         logger.warning("Erro ao buscar população IBGE cod=%s: %s", cod_ibge, exc)
+        return None, None
+
+
+def fetch_pib(cod_ibge: str) -> tuple[float | None, str | None]:
+    """
+    PIB municipal a preços correntes em mil reais (SIDRA agregado 5938, variável 37).
+
+    Retorna (pib_mil_reais, ano) ou (None, None) em falha/ausência.
+    """
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        return None, None
+
+    cb = get_circuit_breaker("ibge")
+    if cb.is_open():
+        return None, None
+
+    try:
+        valor, ano = _fetch_n6_latest(cod_ibge, _PIB_AGREGADO, _PIB_VARIAVEL)
+        cb.record_success()
+        return (float(valor) if valor is not None else None), ano
+    except Exception as exc:
+        cb.record_failure()
+        logger.warning("Erro ao buscar PIB IBGE cod=%s: %s", cod_ibge, exc)
         return None, None
 
 

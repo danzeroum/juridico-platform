@@ -73,9 +73,9 @@ export default function ComplianceRadarPage() {
     enabled: !!selectedUf,
   })
 
-  const populacaoQuery = useQuery({
-    queryKey: ['ibge-populacao', selectedMun?.cod],
-    queryFn: () => complianceApi.populacao(selectedMun!.cod),
+  const perfilQuery = useQuery({
+    queryKey: ['ibge-perfil', selectedMun?.cod],
+    queryFn: () => complianceApi.perfil(selectedMun!.cod),
     enabled: !!selectedMun,
   })
 
@@ -223,13 +223,33 @@ export default function ComplianceRadarPage() {
 
               {selectedMun && (
                 <div className="mt-1 rounded-card bg-surfaceMuted p-4">
-                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-1">{selectedMun.nome}</p>
-                  {populacaoQuery.isLoading && <span className="text-[12px] text-textMuted">Consultando IBGE…</span>}
-                  {populacaoQuery.data && (
-                    <p className="font-mono text-[20px] font-bold text-textPrimary">
-                      {populacaoQuery.data.populacao != null ? populacaoQuery.data.populacao.toLocaleString('pt-BR') : '—'}
-                      <span className="text-[11px] font-normal text-textMuted ml-2">hab. · pop. estimada {populacaoQuery.data.ano ?? ''}</span>
-                    </p>
+                  <p className="text-[10px] uppercase tracking-[0.04em] text-textSectionLabel font-semibold mb-2">{selectedMun.nome} · perfil IBGE</p>
+                  {perfilQuery.isLoading && <span className="text-[12px] text-textMuted">Consultando IBGE…</span>}
+                  {perfilQuery.data && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">População estimada {perfilQuery.data.populacao_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.populacao != null ? perfilQuery.data.populacao.toLocaleString('pt-BR') : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">PIB {perfilQuery.data.pib_ano ?? ''}</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.pib_reais != null
+                            ? perfilQuery.data.pib_reais.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact', maximumFractionDigits: 1 })
+                            : '—'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-textMuted mb-0.5">PIB per capita</p>
+                        <p className="font-mono text-[18px] font-bold text-textPrimary">
+                          {perfilQuery.data.pib_per_capita != null
+                            ? perfilQuery.data.pib_per_capita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

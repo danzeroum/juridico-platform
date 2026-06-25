@@ -30,6 +30,17 @@ export interface PopulacaoResponse {
   contract_version: string
 }
 
+export interface PerfilResponse {
+  cod_ibge: string
+  populacao: number | null
+  populacao_ano: string | null
+  pib_reais: number | null
+  pib_ano: string | null
+  pib_per_capita: number | null
+  source: string
+  contract_version: string
+}
+
 export const complianceApi = {
   evaluate: (ibgeCode: string) =>
     api.post<ComplianceEvaluation>(`/api/v1/compliance/municipality/${ibgeCode}/evaluate`, {}),
@@ -40,4 +51,7 @@ export const complianceApi = {
 
   populacao: (codIbge: string) =>
     api.get<PopulacaoResponse>(`/api/v1/compliance/municipio/${codIbge}/populacao`),
+
+  perfil: (codIbge: string) =>
+    api.get<PerfilResponse>(`/api/v1/compliance/municipio/${codIbge}/perfil`),
 }

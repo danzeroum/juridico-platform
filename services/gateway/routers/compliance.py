@@ -430,6 +430,40 @@ async def municipio_populacao(cod_ibge: str) -> JSONResponse:
     })
 
 
+@router.get(
+    "/municipio/{cod_ibge}/perfil",
+    summary="Perfil socioeconômico (IBGE) de um município",
+)
+async def municipio_perfil(cod_ibge: str) -> JSONResponse:
+    """
+    Perfil socioeconômico do município coletado ao vivo do IBGE:
+    população estimada, PIB a preços correntes e PIB per capita derivado.
+    """
+    if not cod_ibge.isdigit() or len(cod_ibge) != 7:
+        raise HTTPException(
+            status_code=400,
+            detail=_ibge_error(cod_ibge, f"/api/v1/compliance/municipio/{cod_ibge}/perfil"),
+        )
+    from services.ingest.tasks.ibge import fetch_pib, fetch_populacao
+
+    populacao, pop_ano = fetch_populacao(cod_ibge)
+    pib_mil, pib_ano = fetch_pib(cod_ibge)
+    pib_reais = pib_mil * 1000 if pib_mil is not None else None
+    pib_per_capita = (
+        round(pib_reais / populacao, 2) if pib_reais and populacao else None
+    )
+    return JSONResponse(content={
+        "cod_ibge": cod_ibge,
+        "populacao": populacao,
+        "populacao_ano": pop_ano,
+        "pib_reais": pib_reais,
+        "pib_ano": pib_ano,
+        "pib_per_capita": pib_per_capita,
+        "source": "IBGE",
+        "contract_version": "compliance/v1",
+    })
+
+
 class _noop_span:
     def __enter__(self): return None
     def __exit__(self, *_): pass
