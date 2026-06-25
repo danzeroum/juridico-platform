@@ -28,6 +28,7 @@ const PRODUTOS_NAV: NavItem[] = [
   { code: 'LW', label: 'LicitaWatch', href: '/licita-watch' },
   { code: 'DB', label: 'DanoBot', href: '/danobot', locked: true },
   { code: 'PB', label: 'PetiBot', href: '/petibot' },
+  { code: 'DF', label: 'Defensor', href: '/defensor' },
   { code: 'CC', label: 'ConciliaIA', href: '/concilia' },
   { code: 'TC', label: 'TribunaConnect', href: '/tribuna' },
 ]
