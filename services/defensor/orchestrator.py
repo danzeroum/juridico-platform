@@ -18,13 +18,19 @@ import logging
 from datetime import UTC, datetime
 
 from services.petibot.assembler import assemble_petition
+from services.shared.ai.generate import generate_text
 from services.shared.contracts.defensor import (
     Canal,
     DefensorRequest,
     DefensorResponse,
     EventoAgente,
 )
-from services.shared.contracts.petibot import PetiRequest, TipoAcao
+from services.shared.contracts.petibot import PetiRequest, PetiSection, TipoAcao
+
+_LLM_SYSTEM = (
+    "Você é advogado(a) redigindo a defesa de uma empresa em reclamação de "
+    "consumidor. Escreva de forma objetiva, técnica e fundamentada, em português."
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +62,42 @@ def _definir_responsavel(request: DefensorRequest) -> tuple[str, str]:
     if request.canal == Canal.CONTENCIOSO or alto_valor:
         return "humano", "AGUARDA_PROTOCOLO"
     return "agente", "DEFESA_PRONTA"
+
+
+def _redigir_secoes(
+    request: DefensorRequest, secoes: list[PetiSection]
+) -> tuple[list[PetiSection], str]:
+    """
+    Tenta redigir cada seção via LLM; cai para o template do PetiBot quando o LLM
+    está indisponível. Retorna (secoes, via) com via ∈ {"llm", "template"}.
+
+    Curto-circuita após a primeira falha de LLM para não acumular timeouts.
+    """
+    redigidas: list[PetiSection] = []
+    via = "template"
+    llm_ok = True
+
+    for sec in secoes:
+        texto: str | None = None
+        if llm_ok:
+            prompt = (
+                f'Redija a seção "{sec.titulo}" da defesa, no canal {request.canal.value}, '
+                f"para um caso do tipo {request.tipo_caso.value}.\n"
+                f"Reclamante: {request.reclamante}. Reclamada: {request.reclamada}.\n"
+                f"Fatos relatados: {request.descricao}\n"
+                "Escreva 1 a 2 parágrafos em linguagem jurídica, sem inventar fatos não informados."
+            )
+            texto = generate_text(prompt, system=_LLM_SYSTEM, max_tokens=400)
+            if texto is None:
+                llm_ok = False  # provedor indisponível — não tenta as demais seções
+
+        if texto:
+            via = "llm"
+            redigidas.append(PetiSection(titulo=sec.titulo, conteudo=texto, precedentes=sec.precedentes))
+        else:
+            redigidas.append(sec)
+
+    return redigidas, via
 
 
 def run_agente(request: DefensorRequest) -> DefensorResponse:
@@ -99,9 +141,15 @@ def run_agente(request: DefensorRequest) -> DefensorResponse:
         ts=_now_iso(), evento="jurisprudencia.match",
         detalhe=f"{peti.precedentes_encontrados} precedentes",
     ))
-    eventos.append(EventoAgente(ts=_now_iso(), evento="defesa.redigindo", detalhe="rascunho v3"))
+
+    secoes, defesa_via = _redigir_secoes(request, peti.secoes)
     eventos.append(EventoAgente(
-        ts=_now_iso(), evento="defesa.pronta", detalhe=f"{len(peti.secoes)} seções",
+        ts=_now_iso(), evento="defesa.redigindo",
+        detalhe="rascunho via IA" if defesa_via == "llm" else "rascunho (template)",
+        status="ok" if defesa_via == "llm" else "running",
+    ))
+    eventos.append(EventoAgente(
+        ts=_now_iso(), evento="defesa.pronta", detalhe=f"{len(secoes)} seções",
     ))
 
     # 6. Preparo de protocolo + handoff
@@ -116,11 +164,12 @@ def run_agente(request: DefensorRequest) -> DefensorResponse:
         classificacao=classificacao,
         canal=request.canal.value,
         eventos=eventos,
-        secoes=peti.secoes,
+        secoes=secoes,
         precedentes_encontrados=peti.precedentes_encontrados,
         casos_anteriores=casos_anteriores,
         subsidios=subsidios,
         proximo_responsavel=proximo_responsavel,
         status=status,
+        defesa_via=defesa_via,
         computed_at=_now_iso(),
     )

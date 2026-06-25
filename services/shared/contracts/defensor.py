@@ -75,5 +75,6 @@ class DefensorResponse(BaseModel):
     subsidios:               list[str] = Field(default_factory=list)
     proximo_responsavel:     str  # "agente" | "humano" (handoff)
     status:                  str  # ex.: "DEFESA_PRONTA", "AGUARDA_PROTOCOLO"
+    defesa_via:              str = "template"  # "llm" se redigida por LLM; senão "template"
     computed_at:             str
     contract_version:        str = DEFENSOR_CONTRACT_VERSION

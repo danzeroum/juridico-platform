@@ -1,6 +1,8 @@
 """Testes do orquestrador Defensor."""
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from pydantic import ValidationError
 
@@ -11,6 +13,14 @@ from services.shared.contracts.defensor import (
     DefensorRequest,
     TipoCaso,
 )
+
+
+@pytest.fixture(autouse=True)
+def _sem_llm():
+    """Por padrão, sem LLM disponível — exercita o fallback de template (hermético)."""
+    with patch("services.defensor.orchestrator.generate_text", return_value=None):
+        yield
+
 
 _DESCRICAO = (
     "Cobrança indevida recorrente em fatura de telefonia, sem contratação do serviço, "
@@ -98,3 +108,26 @@ class TestRunAgente:
             tipo = TipoCaso.CIVEL if c == Canal.CONTENCIOSO else TipoCaso.CONSUMERISTA
             resp = run_agente(_req(canal=c.value, tipo_caso=tipo.value))
             assert resp.canal == c.value
+
+    def test_sem_llm_usa_template(self):
+        resp = run_agente(_req())
+        assert resp.defesa_via == "template"
+        ev = next(e for e in resp.eventos if e.evento == "defesa.redigindo")
+        assert ev.detalhe == "rascunho (template)"
+
+
+class TestRedacaoLLM:
+    def test_com_llm_usa_texto_gerado(self):
+        with patch("services.defensor.orchestrator.generate_text", return_value="Defesa redigida pela IA."):
+            resp = run_agente(_req())
+        assert resp.defesa_via == "llm"
+        assert all(s.conteudo == "Defesa redigida pela IA." for s in resp.secoes)
+        ev = next(e for e in resp.eventos if e.evento == "defesa.redigindo")
+        assert ev.detalhe == "rascunho via IA"
+
+    def test_llm_falha_no_meio_curto_circuita(self):
+        # Primeira seção falha (None) → não tenta as demais; tudo cai para template.
+        with patch("services.defensor.orchestrator.generate_text", return_value=None) as mock_gen:
+            resp = run_agente(_req())
+        assert resp.defesa_via == "template"
+        assert mock_gen.call_count == 1  # curto-circuito após a 1ª falha

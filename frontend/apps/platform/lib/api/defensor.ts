@@ -18,6 +18,7 @@ export interface DefensorResult {
   subsidios: string[]
   proximo_responsavel: string
   status: string
+  defesa_via: string
   computed_at: string
   contract_version: string
 }

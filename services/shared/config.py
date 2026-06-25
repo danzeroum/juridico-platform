@@ -76,5 +76,26 @@ class _Settings:
     def OLLAMA_URL(self) -> str:
         return os.getenv("OLLAMA_URL", "http://ollama:11434")
 
+    # --- LLM (geração de texto) ---
+    @property
+    def LLM_PROVIDER(self) -> str:
+        return os.getenv("LLM_PROVIDER", "ollama")  # ollama | openai
+
+    @property
+    def LLM_API_KEY(self) -> str:
+        return load_secret("llm_api_key") or os.getenv("LLM_API_KEY", "")
+
+    @property
+    def LLM_BASE_URL(self) -> str:
+        return os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+
+    @property
+    def LLM_MODEL(self) -> str:
+        return os.getenv("LLM_MODEL", "gpt-4o")
+
+    @property
+    def LLM_MODEL_LOCAL(self) -> str:
+        return os.getenv("LLM_MODEL_LOCAL", "llama3:8b")
+
 
 settings = _Settings()
