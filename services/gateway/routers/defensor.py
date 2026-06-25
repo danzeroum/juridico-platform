@@ -12,19 +12,11 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from services.defensor.orchestrator import run_agente
+from services.gateway.observability import span as obs_span
 from services.shared.contracts.defensor import DEFENSOR_CONTRACT_VERSION, DefensorRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# OTel — graceful degradation
-try:
-    from opentelemetry import trace as otel_trace
-    _tracer = otel_trace.get_tracer("defensor")
-    _OTEL = True
-except ImportError:
-    _OTEL = False
-    _tracer = None  # type: ignore[assignment]
 
 
 @router.post(
@@ -78,11 +70,7 @@ async def run(case: DefensorRequest) -> JSONResponse:
 
     Etapas determinísticas; jurisprudência via RAG (degradação graciosa se offline).
     """
-    ctx_manager = _tracer.start_as_current_span("defensor.run") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("canal", case.canal.value)
-            span.set_attribute("tipo_caso", case.tipo_caso.value)
+    with obs_span("defensor.run", {"canal": case.canal.value, "tipo_caso": case.tipo_caso.value}):
         response = run_agente(case)
         return JSONResponse(content=response.model_dump(), status_code=200)
 
@@ -124,8 +112,3 @@ async def reputacao(termo: str) -> JSONResponse:
         "source": "Consumidor.gov",
         "contract_version": DEFENSOR_CONTRACT_VERSION,
     })
-
-
-class _noop_span:
-    def __enter__(self): return None
-    def __exit__(self, *_): pass

@@ -1,12 +1,11 @@
 'use client'
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Card, SectionLabel, Badge, FreshnessSeal, Input, Button, Table, Thead, Tbody, Tr, Th, Td, EmptyState, ProblemJsonError } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
+import { Card, SectionLabel, Badge, FreshnessSeal, Input, Button, Table, Thead, Tbody, Tr, Th, Td, EmptyState } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { licitawatchApi } from '@/lib/api/licitawatch'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 import { AlertTriangle } from 'lucide-react'
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
@@ -80,9 +79,7 @@ export default function LicitaWatchPage() {
         </form>
       </Card>
 
-      {!demoMode && evalMutation.isError && evalMutation.error instanceof ApiError && (
-        <ProblemJsonError error={evalMutation.error.problem as ProblemJson} />
-      )}
+      <ApiErrorBanner error={evalMutation.error} demoMode={demoMode} />
 
       {!hasResult && !evalMutation.isPending && <EmptyState icon="📋" title="Informe o CNPJ de um órgão público para avaliar contratos e licitações" />}
 

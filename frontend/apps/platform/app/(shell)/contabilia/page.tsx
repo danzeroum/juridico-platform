@@ -3,13 +3,12 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, JobProgress, Dropzone, EmptyState,
-  Button, ViewerBanner, RbacGate, FreshnessSeal, ProblemJsonError,
+  Button, ViewerBanner, RbacGate, FreshnessSeal,
 } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
 import { contabiliaApi } from '@/lib/api/contabilia'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell, Tooltip } from 'recharts'
 import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { cn } from '@juridico/ui'
@@ -143,9 +142,7 @@ export default function ContabilIAPage() {
             />
           </RbacGate>
 
-          {uploadMutation.isError && uploadMutation.error instanceof ApiError && (
-            <ProblemJsonError error={uploadMutation.error.problem as ProblemJson} />
-          )}
+          <ApiErrorBanner error={uploadMutation.error} />
 
           <div className="grid grid-cols-4 gap-2">
             {CHECKS.map((c) => (

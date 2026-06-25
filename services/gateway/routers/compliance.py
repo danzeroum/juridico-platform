@@ -20,17 +20,9 @@ from fastapi.responses import JSONResponse
 
 from services.compliance.monitor import build_indicadores_from_cache, evaluate_municipio
 from services.compliance.rules import ALERT_RULES
+from services.gateway.observability import span as obs_span
 
 router = APIRouter()
-
-# OTel — graceful degradation
-try:
-    from opentelemetry import trace as otel_trace
-    _tracer = otel_trace.get_tracer("compliance")
-    _OTEL = True
-except ImportError:
-    _OTEL = False
-    _tracer = None  # type: ignore[assignment]
 
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -262,10 +254,7 @@ async def municipality_detail(ibge_code: str) -> JSONResponse:
             status_code=400,
             detail=_ibge_error(ibge_code, f"/api/v1/compliance/municipality/{ibge_code}"),
         )
-    ctx_manager = _tracer.start_as_current_span("compliance.municipality_detail") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("ibge_code", ibge_code)
+    with obs_span("compliance.municipality_detail", {"ibge_code": ibge_code}):
         try:
             r = _get_redis()
             summary = _build_summary(ibge_code, r)
@@ -489,6 +478,3 @@ async def municipio_perfil(cod_ibge: str) -> JSONResponse:
     })
 
 
-class _noop_span:
-    def __enter__(self): return None
-    def __exit__(self, *_): pass

@@ -14,20 +14,12 @@ import os
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from services.gateway.observability import span as obs_span
 from services.ingest.contracts.pncp import PncpContratoSilver
 from services.licitawatch.monitor import build_indicadores_from_silver, evaluate_licitacoes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# OTel — graceful degradation
-try:
-    from opentelemetry import trace as otel_trace
-    _tracer = otel_trace.get_tracer("licitawatch")
-    _OTEL = True
-except ImportError:
-    _OTEL = False
-    _tracer = None  # type: ignore[assignment]
 
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
@@ -55,11 +47,7 @@ async def list_contratos(
                 "contract_version": "licitawatch/v1",
             },
         )
-    ctx_manager = _tracer.start_as_current_span("licitawatch.list_contratos") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("cnpj_orgao", cnpj_orgao[:6] + "****")
-            span.set_attribute("referencia", referencia)
+    with obs_span("licitawatch.list_contratos", {"cnpj_orgao": cnpj_orgao[:6] + "****", "referencia": referencia}):
         try:
             r = _get_redis()
             pattern = f"pncp:{cnpj_orgao}:{referencia}:*"
@@ -108,12 +96,7 @@ async def evaluate_orgao(
     except Exception:
         contratos = []
 
-    ctx_manager = _tracer.start_as_current_span("licitawatch.evaluate_orgao") if _OTEL else _noop_span()
-    with ctx_manager as span:
-        if _OTEL and span:
-            span.set_attribute("cnpj_orgao", cnpj_orgao[:6] + "****")
-            span.set_attribute("referencia", referencia)
-
+    with obs_span("licitawatch.evaluate_orgao", {"cnpj_orgao": cnpj_orgao[:6] + "****", "referencia": referencia}):
         ind = build_indicadores_from_silver(cnpj_orgao, referencia, contratos)
         envelopes = evaluate_licitacoes(ind)
 
@@ -133,6 +116,3 @@ async def evaluate_orgao(
         })
 
 
-class _noop_span:
-    def __enter__(self): return None
-    def __exit__(self, *_): pass

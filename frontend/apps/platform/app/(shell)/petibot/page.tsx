@@ -4,12 +4,11 @@ import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, VerifiableCitationChip, AntiHallucinationGuard,
   EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate, HeuristicBadge,
-  Skeleton, ProblemJsonError,
+  Skeleton,
 } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
 import { petibotApi } from '@/lib/api/petibot'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 
 const TIPOS = ['TRABALHISTA', 'CIVEL', 'TRIBUTARIO', 'PREVIDENCIARIO', 'ADMINISTRATIVO', 'CONSUMERISTA']
 
@@ -127,9 +126,7 @@ export default function PetiBotPage() {
         </RbacGate>
       </Card>
 
-      {!demoMode && assembleMutation.isError && assembleMutation.error instanceof ApiError && (
-        <ProblemJsonError error={assembleMutation.error.problem as ProblemJson} />
-      )}
+      <ApiErrorBanner error={assembleMutation.error} demoMode={demoMode} />
 
       {assembleMutation.isPending && !demoMode && (
         <div className="grid grid-cols-3 gap-4">

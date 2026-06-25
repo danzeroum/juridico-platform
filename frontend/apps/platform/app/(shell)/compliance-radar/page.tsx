@@ -1,12 +1,11 @@
 'use client'
 import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button, ProblemJsonError, Skeleton } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
+import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button, Skeleton } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
 import { complianceApi } from '@/lib/api/compliance'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 import { Tabs, TabPanel } from '@juridico/ui'
 import type { AlertItem } from '@juridico/ui'
 
@@ -166,9 +165,7 @@ export default function ComplianceRadarPage() {
             </div>
           </div>
 
-          {evalMutation.isError && evalMutation.error instanceof ApiError && (
-            <ProblemJsonError error={evalMutation.error.problem as ProblemJson} />
-          )}
+          <ApiErrorBanner error={evalMutation.error} />
           <div className="grid grid-cols-3 gap-3">
             {MOCK_INDICATORS.map((ind) => (
               <div key={ind.label} className="bg-surfaceMuted rounded-card p-3">
@@ -198,9 +195,7 @@ export default function ComplianceRadarPage() {
 
           {selectedUf && municipiosQuery.isLoading && <Skeleton height={240} className="rounded-card" />}
 
-          {selectedUf && municipiosQuery.isError && municipiosQuery.error instanceof ApiError && (
-            <ProblemJsonError error={municipiosQuery.error.problem as ProblemJson} />
-          )}
+          <ApiErrorBanner error={municipiosQuery.error} />
 
           {selectedUf && municipiosQuery.data && (
             <div className="flex flex-col gap-3">

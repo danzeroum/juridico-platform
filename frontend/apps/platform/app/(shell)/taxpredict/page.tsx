@@ -4,12 +4,11 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, ProbabilityDonut, HeuristicBadge,
   DegradationBanner, EmptyState, Textarea, Button, ViewerBanner, RbacGate,
-  VerifiableCitationChip, Skeleton, ProblemJsonError,
+  VerifiableCitationChip, Skeleton,
 } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
 import { taxpredictApi } from '@/lib/api/taxpredict'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 
 const MATERIAS = ['PIS_COFINS', 'IRPJ', 'CSLL', 'ICMS', 'IPI', 'ISS', 'SIMPLES']
 
@@ -172,9 +171,7 @@ export default function TaxPredictPage() {
         </div>
       </Card>
 
-      {!demoMode && predictMutation.isError && predictMutation.error instanceof ApiError && (
-        <ProblemJsonError error={predictMutation.error.problem as ProblemJson} />
-      )}
+      <ApiErrorBanner error={predictMutation.error} demoMode={demoMode} />
 
       {predictMutation.isPending && !demoMode && (
         <div className="grid grid-cols-3 gap-4">

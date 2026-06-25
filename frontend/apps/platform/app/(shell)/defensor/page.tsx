@@ -3,12 +3,11 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Card, SectionLabel, Badge, VerifiableCitationChip, AntiHallucinationGuard,
-  EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate, Skeleton, ProblemJsonError,
+  EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate, Skeleton,
 } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
 import { defensorApi } from '@/lib/api/defensor'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 
 function fmtTs(ts: string): string {
   return ts.length >= 19 && ts.includes('T') ? ts.slice(11, 19) : ts
@@ -168,9 +167,7 @@ export default function DefensorPage() {
         </RbacGate>
       </Card>
 
-      {!demoMode && runMutation.isError && runMutation.error instanceof ApiError && (
-        <ProblemJsonError error={runMutation.error.problem as ProblemJson} />
-      )}
+      <ApiErrorBanner error={runMutation.error} demoMode={demoMode} />
 
       {runMutation.isPending && !demoMode && (
         <div className="grid grid-cols-3 gap-4">

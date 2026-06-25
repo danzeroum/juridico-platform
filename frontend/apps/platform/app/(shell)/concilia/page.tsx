@@ -3,12 +3,11 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, SettlementRangeBar, DegradationBanner,
-  EmptyState, Input, Textarea, Button, ViewerBanner, RbacGate, Skeleton, ProblemJsonError,
+  EmptyState, Input, Textarea, Button, ViewerBanner, RbacGate, Skeleton,
 } from '@juridico/ui'
-import type { ProblemJson } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
 import { conciliaApi } from '@/lib/api/concilia'
-import { ApiError } from '@/lib/api/client'
+import { ApiErrorBanner } from '@/components/ApiErrorBanner'
 
 function riskBand(score: number | null | undefined): string {
   if (score == null) return 'MODERADO'
@@ -115,9 +114,7 @@ export default function ConciliaIAPage() {
         </RbacGate>
       </Card>
 
-      {!demoMode && recommendMutation.isError && recommendMutation.error instanceof ApiError && (
-        <ProblemJsonError error={recommendMutation.error.problem as ProblemJson} />
-      )}
+      <ApiErrorBanner error={recommendMutation.error} demoMode={demoMode} />
 
       {recommendMutation.isPending && !demoMode && (
         <div className="grid grid-cols-2 gap-4">
