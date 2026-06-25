@@ -62,7 +62,7 @@ export default function LegalScorePage() {
   const result = demoMode
     ? {
         score: simulateDegraded ? 521 : 648,
-        risk_level: (simulateDegraded ? 'MODERADO' : 'MODERADO') as const,
+        risk_level: 'MODERADO' as const,
         confidence_interval: simulateDegraded ? [460, 590] : [610, 689] as [number, number],
         breakdown: MOCK_BREAKDOWN,
         engine: 'rust' as const,

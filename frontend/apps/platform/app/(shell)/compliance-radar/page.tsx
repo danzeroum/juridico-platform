@@ -1,10 +1,16 @@
 'use client'
 import { useState } from 'react'
-import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button } from '@juridico/ui'
+import { useMutation } from '@tanstack/react-query'
+import { Card, CardHeader, SectionLabel, Badge, FreshnessSeal, AlertList, EmptyState, Button, ProblemJsonError } from '@juridico/ui'
+import type { ProblemJson } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
+import { complianceApi } from '@/lib/api/compliance'
+import { ApiError } from '@/lib/api/client'
 import { Tabs, TabPanel } from '@juridico/ui'
 import type { AlertItem } from '@juridico/ui'
+
+const PERFIL_IBGE = '1302603' // Manaus/AM
 
 const UF_DATA = [
   { uf: 'SP', severity: 'LOW' as const }, { uf: 'RJ', severity: 'HIGH' as const },
@@ -53,6 +59,10 @@ export default function ComplianceRadarPage() {
   const { demoMode } = useShell()
   const [activeTab, setActiveTab] = useState('cartograma')
   const [selectedUf, setSelectedUf] = useState<string | null>(null)
+
+  const evalMutation = useMutation({
+    mutationFn: () => complianceApi.evaluate(PERFIL_IBGE),
+  })
 
   return (
     <div className="flex flex-col gap-5">
@@ -126,11 +136,24 @@ export default function ComplianceRadarPage() {
         <Card padding="md" className="mt-4 flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="font-mono text-[12px] text-textMuted">IBGE: 1302603</p>
+              <p className="font-mono text-[12px] text-textMuted">IBGE: {PERFIL_IBGE}</p>
               <h2 className="text-[17px] font-bold text-textPrimary">Manaus / AM</h2>
             </div>
-            <Button variant="secondary" size="sm">Avaliar regras agora</Button>
+            <div className="flex items-center gap-3">
+              {evalMutation.isSuccess && (
+                <Badge variant={evalMutation.data.rules_fired > 0 ? 'ALTO' : 'LOW'}>
+                  {evalMutation.data.rules_fired} regra(s) disparada(s)
+                </Badge>
+              )}
+              <Button variant="secondary" size="sm" loading={evalMutation.isPending} onClick={() => evalMutation.mutate()}>
+                Avaliar regras agora
+              </Button>
+            </div>
           </div>
+
+          {evalMutation.isError && evalMutation.error instanceof ApiError && (
+            <ProblemJsonError error={evalMutation.error.problem as ProblemJson} />
+          )}
           <div className="grid grid-cols-3 gap-3">
             {MOCK_INDICATORS.map((ind) => (
               <div key={ind.label} className="bg-surfaceMuted rounded-card p-3">

@@ -1,12 +1,15 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, ProbabilityDonut, HeuristicBadge,
   DegradationBanner, EmptyState, Textarea, Button, ViewerBanner, RbacGate,
-  VerifiableCitationChip,
+  VerifiableCitationChip, Skeleton, ProblemJsonError,
 } from '@juridico/ui'
+import type { ProblemJson } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell } from 'recharts'
+import { taxpredictApi } from '@/lib/api/taxpredict'
+import { ApiError } from '@/lib/api/client'
 
 const MATERIAS = ['PIS_COFINS', 'IRPJ', 'CSLL', 'ICMS', 'IPI', 'ISS', 'SIMPLES']
 
@@ -42,11 +45,40 @@ export default function TaxPredictPage() {
   const [descricao, setDescricao] = useState('')
   const [materia, setMateria] = useState('PIS_COFINS')
   const [showFallback, setShowFallback] = useState(false)
-  const [hasResult, setHasResult] = useState(demoMode)
 
-  const result = showFallback
-    ? { ...MOCK_RESULT, probability: 0.30, ci_lower: 0.20, ci_upper: 0.42, is_fallback: true }
-    : MOCK_RESULT
+  const predictMutation = useMutation({
+    mutationFn: () => taxpredictApi.predict({ descricao, materia }),
+  })
+
+  const hasResult = demoMode || predictMutation.isSuccess
+  const apiData = predictMutation.data
+
+  const result = demoMode
+    ? (showFallback
+        ? { ...MOCK_RESULT, probability: 0.30, ci_lower: 0.20, ci_upper: 0.42, is_fallback: true }
+        : MOCK_RESULT)
+    : apiData
+      ? {
+          probability: apiData.probability,
+          ci_lower: apiData.ci_lower,
+          ci_upper: apiData.ci_upper,
+          model_status: 'heuristica' as const,
+          is_fallback: apiData.is_fallback,
+          shap: Object.entries(apiData.features_used).map(([name, value]) => ({
+            name,
+            impact: 0,
+            label: `${name}: ${value}`,
+          })),
+          jurisprudencias: apiData.jurisprudencias.map((j) => ({
+            doc_id: j.doc_id,
+            similarity: j.similarity,
+            tribunal: j.tribunal ?? '—',
+            ano: j.ano ?? 0,
+            decisao: j.decisao,
+            ementa: j.ementa,
+          })),
+        }
+      : null
 
   return (
     <div className="flex flex-col gap-5">
@@ -83,14 +115,27 @@ export default function TaxPredictPage() {
             </select>
           </div>
           <RbacGate role={role} requires="analyst">
-            <Button onClick={() => setHasResult(true)}>Prever desfecho</Button>
+            <Button onClick={() => predictMutation.mutate()} loading={predictMutation.isPending}>
+              Prever desfecho
+            </Button>
           </RbacGate>
         </div>
       </Card>
 
-      {!hasResult && <EmptyState icon="⚖️" title="Preencha o formulário e clique em Prever desfecho" />}
+      {!demoMode && predictMutation.isError && predictMutation.error instanceof ApiError && (
+        <ProblemJsonError error={predictMutation.error.problem as ProblemJson} />
+      )}
 
-      {hasResult && (
+      {predictMutation.isPending && !demoMode && (
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton height={200} className="rounded-card" />
+          <Skeleton height={200} className="rounded-card col-span-2" />
+        </div>
+      )}
+
+      {!hasResult && !predictMutation.isPending && <EmptyState icon="⚖️" title="Preencha o formulário e clique em Prever desfecho" />}
+
+      {hasResult && result && (
         <div className="flex flex-col gap-4">
           {result.is_fallback && (
             <DegradationBanner

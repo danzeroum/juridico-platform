@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { Card, SectionLabel, AlertList, Badge } from '@juridico/ui'
-import type { AlertItem, AlertSeverity } from '@juridico/ui'
-import type { AlertChannel, DeliveryStatus } from '@juridico/tokens'
+import type { AlertItem } from '@juridico/ui'
+import type { AlertChannel, DeliveryStatus, AlertSeverity } from '@juridico/tokens'
 
 const MOCK_ALERTS: AlertItem[] = [
   { id: '1', severity: 'CRITICAL', title: 'Arrecadação crítica — Manaus/AM', subjectRef: 'IBGE:1302603', channels: ['email', 'webhook'], deliveryStatus: 'done', createdAt: '2h' },

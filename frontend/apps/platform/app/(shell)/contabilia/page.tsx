@@ -1,15 +1,32 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import {
   Card, CardHeader, SectionLabel, Badge, JobProgress, Dropzone, EmptyState,
-  Button, ViewerBanner, RbacGate, FreshnessSeal,
+  Button, ViewerBanner, RbacGate, FreshnessSeal, ProblemJsonError,
 } from '@juridico/ui'
+import type { ProblemJson } from '@juridico/ui'
 import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
+import { contabiliaApi } from '@/lib/api/contabilia'
+import { ApiError } from '@/lib/api/client'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell, Tooltip } from 'recharts'
 import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { cn } from '@juridico/ui'
 import type { JobStep } from '@juridico/ui'
+
+const SEVERITY_VARIANT: Record<string, string> = { CRITICO: 'CRITICAL', ALTO: 'HIGH', MEDIO: 'MEDIUM' }
+const SEVERITY_STATUS: Record<string, string> = { CRITICO: 'SUSPEITO', ALTO: 'MARGINAL', MEDIO: 'MARGINAL' }
+
+interface FindingView {
+  id: string
+  severity: string
+  label: string
+  status: string
+  evidence: string
+  source?: string
+  lagDays?: number
+}
 
 type Stage = 'upload' | 'processing' | 'report'
 
@@ -68,6 +85,34 @@ export default function ContabilIAPage() {
   const [stage, setStage] = useState<Stage>('upload')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) => contabiliaApi.upload(file),
+    onSuccess: () => setStage('report'),
+    onError: () => setStage('upload'),
+  })
+
+  const apiData = uploadMutation.data
+
+  const findings: FindingView[] = demoMode || !apiData
+    ? MOCK_FINDINGS
+    : apiData.findings.map((f) => ({
+        id: f.rule,
+        severity: SEVERITY_VARIANT[f.severity] ?? 'LOW',
+        label: f.description,
+        status: SEVERITY_STATUS[f.severity] ?? 'CONFORME',
+        evidence: f.detail,
+      }))
+
+  const reportId = demoMode || !apiData ? 'rep_demo_001' : apiData.report_id
+
+  function onUpload(files: FileList) {
+    if (demoMode) { setStage('processing'); return }
+    const file = files[0]
+    if (!file) return
+    setStage('processing')
+    uploadMutation.mutate(file)
+  }
+
   function toggle(id: string) {
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -92,11 +137,15 @@ export default function ContabilIAPage() {
           <SectionLabel>Enviar demonstrações financeiras</SectionLabel>
           <RbacGate role={role} requires="analyst">
             <Dropzone
-              accept=".csv,.pdf"
-              hint="CSV ou PDF (OCR disponível) · processamento em até 60s"
-              onFiles={() => setStage('processing')}
+              accept=".csv"
+              hint="CSV (conta,valor[,descricao]) · processamento em até 60s"
+              onFiles={onUpload}
             />
           </RbacGate>
+
+          {uploadMutation.isError && uploadMutation.error instanceof ApiError && (
+            <ProblemJsonError error={uploadMutation.error.problem as ProblemJson} />
+          )}
 
           <div className="grid grid-cols-4 gap-2">
             {CHECKS.map((c) => (
@@ -118,17 +167,19 @@ export default function ContabilIAPage() {
       {stage === 'processing' && (
         <Card padding="md">
           <div className="flex flex-col gap-2 mb-4">
-            <span className="font-mono text-[10px] text-textFaint">202 Accepted</span>
-            <p className="font-mono text-[40px] font-bold text-accent">62%</p>
+            <span className="font-mono text-[10px] text-textFaint">{demoMode ? '202 Accepted' : 'Processando…'}</span>
+            <p className="font-mono text-[40px] font-bold text-accent">{demoMode ? '62%' : '…'}</p>
           </div>
           <JobProgress
             status="running"
-            progress={62}
+            progress={demoMode ? 62 : 40}
             steps={MOCK_STEPS}
           />
-          <Button variant="secondary" size="sm" className="mt-4" onClick={() => setStage('report')}>
-            Ver relatório (demo)
-          </Button>
+          {demoMode && (
+            <Button variant="secondary" size="sm" className="mt-4" onClick={() => setStage('report')}>
+              Ver relatório (demo)
+            </Button>
+          )}
         </Card>
       )}
 
@@ -139,7 +190,7 @@ export default function ContabilIAPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-riskLowText mb-1">LAUDO PRONTO</p>
-                <p className="font-mono text-[12px] text-textSecondary">report_id: rep_demo_001</p>
+                <p className="font-mono text-[12px] text-textSecondary">report_id: {reportId}</p>
               </div>
               <div className="flex items-center gap-3">
                 <FreshnessSeal source="SICONFI" lagDays={365} band={lagToFreshnessBand(365)} />
@@ -157,7 +208,7 @@ export default function ContabilIAPage() {
               <SectionLabel>Achados por severidade</SectionLabel>
             </CardHeader>
             <div className="divide-y divide-[#f0f2f5]">
-              {MOCK_FINDINGS.map((f) => (
+              {findings.map((f) => (
                 <div key={f.id}>
                   <button
                     onClick={() => toggle(f.id)}
@@ -165,7 +216,7 @@ export default function ContabilIAPage() {
                     aria-expanded={expanded.has(f.id)}
                   >
                     <span className="font-mono text-[10px] font-bold text-textMuted">{f.id}</span>
-                    <Badge variant={f.severity} dot>{f.severity}</Badge>
+                    <Badge variant={f.severity as any} dot>{f.severity}</Badge>
                     <span className="flex-1 text-left text-[13px] font-medium text-textPrimary">{f.label}</span>
                     <Badge variant={f.status === 'SUSPEITO' ? 'CRITICO' : f.status === 'MARGINAL' ? 'MODERADO' : 'LOW'}>
                       {f.status}
@@ -182,10 +233,12 @@ export default function ContabilIAPage() {
                           <p className="text-textSectionLabel font-semibold text-[10px] uppercase tracking-[0.04em] mb-1">Evidência</p>
                           <p className="text-textSecondary">{f.evidence}</p>
                         </div>
-                        <div>
-                          <p className="text-textSectionLabel font-semibold text-[10px] uppercase tracking-[0.04em] mb-1">Fonte</p>
-                          <FreshnessSeal source={f.source} lagDays={f.lagDays} band={lagToFreshnessBand(f.lagDays)} />
-                        </div>
+                        {f.source != null && f.lagDays != null && (
+                          <div>
+                            <p className="text-textSectionLabel font-semibold text-[10px] uppercase tracking-[0.04em] mb-1">Fonte</p>
+                            <FreshnessSeal source={f.source} lagDays={f.lagDays} band={lagToFreshnessBand(f.lagDays)} />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -194,7 +247,8 @@ export default function ContabilIAPage() {
             </div>
           </Card>
 
-          {/* Benford chart */}
+          {/* Benford chart — distribuição de dígitos disponível no modo demo */}
+          {demoMode && (
           <Card padding="md">
             <SectionLabel className="mb-4">Lei de Benford — CC05</SectionLabel>
             <ResponsiveContainer width="100%" height={180}>
@@ -212,6 +266,7 @@ export default function ContabilIAPage() {
             </ResponsiveContainer>
             <p className="text-[11px] text-textMuted mt-2 font-mono">χ² = 24.3 · p &lt; 0.001 · SUSPEITO</p>
           </Card>
+          )}
         </div>
       )}
     </div>

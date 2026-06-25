@@ -1,10 +1,18 @@
 'use client'
 import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import {
   Card, SectionLabel, Badge, VerifiableCitationChip, AntiHallucinationGuard,
-  EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate,
+  EmptyState, Textarea, Input, Button, ViewerBanner, RbacGate, Skeleton, ProblemJsonError,
 } from '@juridico/ui'
+import type { ProblemJson } from '@juridico/ui'
 import { useShell } from '@/app/context/shell'
+import { defensorApi } from '@/lib/api/defensor'
+import { ApiError } from '@/lib/api/client'
+
+function fmtTs(ts: string): string {
+  return ts.length >= 19 && ts.includes('T') ? ts.slice(11, 19) : ts
+}
 
 const CANAIS = ['PROCON', 'CONSUMIDOR_GOV', 'OUVIDORIA', 'CONTENCIOSO']
 const TIPOS = ['CONSUMERISTA', 'CIVEL', 'TRABALHISTA', 'TRIBUTARIO', 'PREVIDENCIARIO', 'ADMINISTRATIVO']
@@ -67,10 +75,42 @@ function StatusDot({ status }: { status: Status }) {
 
 export default function DefensorPage() {
   const { role, demoMode } = useShell()
-  const [hasResult, setHasResult] = useState(demoMode)
   const [descricao, setDescricao] = useState('')
   const [canal, setCanal] = useState('PROCON')
   const [tipo, setTipo] = useState('CONSUMERISTA')
+  const [reclamante, setReclamante] = useState('')
+  const [reclamada, setReclamada] = useState('')
+
+  const runMutation = useMutation({
+    mutationFn: () =>
+      defensorApi.run({
+        descricao,
+        canal,
+        tipo_caso: tipo,
+        reclamante: reclamante || 'Reclamante',
+        reclamada: reclamada || 'Empresa',
+      }),
+  })
+
+  const hasResult = demoMode || runMutation.isSuccess
+  const apiData = runMutation.data
+
+  const eventos = demoMode || !apiData
+    ? MOCK_EVENTOS
+    : apiData.eventos.map((e) => ({ ts: fmtTs(e.ts), evento: e.evento, detalhe: e.detalhe, status: e.status as Status }))
+
+  const secoes = demoMode || !apiData
+    ? MOCK_SECOES
+    : apiData.secoes.map((s) => ({
+        titulo: s.titulo,
+        conteudo: s.conteudo,
+        precedentes: s.precedentes.map((id) => ({ doc_id: id, href: `https://www.cnj.jus.br/datajud/${id}`, count: 0 })),
+        precedentes_count: s.precedentes.length,
+      }))
+
+  const casosAnteriores = demoMode || !apiData ? 3 : apiData.casos_anteriores
+  const proximoResponsavel = demoMode || !apiData ? 'agente' : apiData.proximo_responsavel
+  const precedentesIndexados = demoMode || !apiData ? 47 : apiData.precedentes_encontrados
 
   return (
     <div className="flex flex-col gap-5">
@@ -112,21 +152,32 @@ export default function DefensorPage() {
               {TIPOS.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
-          <Input label="Reclamante" placeholder="Nome do reclamante" />
-          <Input label="Reclamada" placeholder="Nome da empresa" />
+          <Input label="Reclamante" placeholder="Nome do reclamante" value={reclamante} onChange={(e) => setReclamante(e.target.value)} />
+          <Input label="Reclamada" placeholder="Nome da empresa" value={reclamada} onChange={(e) => setReclamada(e.target.value)} />
         </div>
         <RbacGate role={role} requires="analyst">
-          <Button className="self-start" onClick={() => setHasResult(true)}>Acionar agente</Button>
+          <Button className="self-start" onClick={() => runMutation.mutate()} loading={runMutation.isPending}>Acionar agente</Button>
         </RbacGate>
       </Card>
 
-      {!hasResult && <EmptyState icon="🤖" title="Preencha o formulário e clique em Acionar agente" />}
+      {!demoMode && runMutation.isError && runMutation.error instanceof ApiError && (
+        <ProblemJsonError error={runMutation.error.problem as ProblemJson} />
+      )}
+
+      {runMutation.isPending && !demoMode && (
+        <div className="grid grid-cols-3 gap-4">
+          <Skeleton height={280} className="rounded-card col-span-2" />
+          <Skeleton height={280} className="rounded-card" />
+        </div>
+      )}
+
+      {!hasResult && !runMutation.isPending && <EmptyState icon="🤖" title="Preencha o formulário e clique em Acionar agente" />}
 
       {hasResult && (
         <div className="grid grid-cols-3 gap-4">
           {/* Defesa montada */}
           <div className="col-span-2 flex flex-col gap-4">
-            {MOCK_SECOES.map((secao) => (
+            {secoes.map((secao) => (
               <Card key={secao.titulo} padding="md">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <SectionLabel>{secao.titulo}</SectionLabel>
@@ -165,7 +216,7 @@ export default function DefensorPage() {
                 <span className="ml-2 font-mono text-[10px] tracking-[0.12em] text-[#9fb0c5]">DEFENSOR · AGENT · LIVE</span>
               </div>
               <div className="flex flex-col gap-2.5 px-3 py-3" style={{ background: '#08111f' }}>
-                {MOCK_EVENTOS.map((ev, i) => (
+                {eventos.map((ev, i) => (
                   <div key={i} className="flex items-start gap-2.5">
                     <span className="font-mono text-[10px] text-[#5a6b85] pt-0.5">{ev.ts}</span>
                     <div className="flex flex-col">
@@ -189,12 +240,12 @@ export default function DefensorPage() {
                 </div>
                 <div>
                   <p className="text-[11px] text-textMuted mb-1">Histórico do reclamante</p>
-                  <span className="font-mono text-[18px] font-bold text-textPrimary">3</span>
+                  <span className="font-mono text-[18px] font-bold text-textPrimary">{casosAnteriores}</span>
                   <span className="text-[11px] text-textMuted ml-1">casos anteriores</span>
                 </div>
                 <div>
                   <p className="text-[11px] text-textMuted mb-1">Próximo responsável</p>
-                  <Badge variant="MODERADO">agente</Badge>
+                  <Badge variant={proximoResponsavel === 'humano' ? 'ALTO' : 'MODERADO'}>{proximoResponsavel}</Badge>
                 </div>
               </div>
             </Card>
@@ -205,7 +256,7 @@ export default function DefensorPage() {
                 <span className="w-2 h-2 rounded-full bg-riskLow" style={{ animation: 'pulse 1.6s infinite' }} aria-hidden />
                 <span className="text-[12px] text-riskLowText font-medium">ChromaDB online</span>
               </div>
-              <p className="text-[11px] text-textMuted mt-1">47 precedentes indexados</p>
+              <p className="text-[11px] text-textMuted mt-1">{precedentesIndexados} precedentes indexados</p>
             </Card>
           </div>
         </div>
