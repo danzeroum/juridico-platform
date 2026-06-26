@@ -33,3 +33,10 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+/* Entrada de linha do AgentLiveFeed (terminal). Só transform — nunca opacity,
+   para a linha não ficar invisível se a animação for interrompida. */
+@keyframes fadeup {
+  from { transform: translateY(5px); }
+  to { transform: none; }
+}
