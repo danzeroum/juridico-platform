@@ -34,7 +34,7 @@ export default function ConfiguracoesPage() {
         <Card padding="none">
           <div className="px-5 py-3 border-b border-[#f0f2f5] flex items-center justify-between">
             <SectionLabel>Usuários e papéis</SectionLabel>
-            <Button size="sm">Convidar usuário</Button>
+            <Button size="sm" disabled title="Gestão de usuários — endpoint em implementação">Convidar usuário</Button>
           </div>
           <Table>
             <Thead><Tr><Th>Nome</Th><Th>E-mail</Th><Th>Papel</Th><Th>Status</Th><Th /></Tr></Thead>
@@ -45,7 +45,7 @@ export default function ConfiguracoesPage() {
                   <Td mono>{u.email}</Td>
                   <Td><Badge variant={ROLE_BADGE[u.role] as any}>{u.role}</Badge></Td>
                   <Td><Badge variant={u.status === 'ativo' ? 'LOW' : 'muted'} dot>{u.status}</Badge></Td>
-                  <Td><Button variant="ghost" size="sm">Editar</Button></Td>
+                  <Td><Button variant="ghost" size="sm" disabled title="Edição de usuário — endpoint em implementação">Editar</Button></Td>
                 </Tr>
               ))}
             </Tbody>
@@ -77,7 +77,7 @@ export default function ConfiguracoesPage() {
               <div key={k.label} className="flex items-center justify-between gap-3 bg-surfaceMuted rounded-[8px] px-4 py-2.5">
                 <span className="text-[12px] text-textSecondary">{k.label}</span>
                 <span className="font-mono text-[12px] text-textPrimary">{k.key}</span>
-                <Button variant="ghost" size="sm">Rotacionar</Button>
+                <Button variant="ghost" size="sm" disabled title="Rotação de chave — endpoint em implementação">Rotacionar</Button>
               </div>
             ))}
           </div>

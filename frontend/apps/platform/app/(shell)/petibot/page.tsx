@@ -9,6 +9,7 @@ import {
 import { useShell } from '@/app/context/shell'
 import { petibotApi } from '@/lib/api/petibot'
 import { ApiErrorBanner } from '@/components/ApiErrorBanner'
+import { downloadDoc, slugifyFilename } from '@/lib/export/documents'
 
 const TIPOS = ['TRABALHISTA', 'CIVEL', 'TRIBUTARIO', 'PREVIDENCIARIO', 'ADMINISTRATIVO', 'CONSUMERISTA']
 
@@ -166,7 +167,21 @@ export default function PetiBotPage() {
                 </div>
               </Card>
             ))}
-            <Button variant="secondary" className="self-start">Exportar .docx</Button>
+            <Button
+              variant="secondary"
+              className="self-start"
+              onClick={() =>
+                downloadDoc({
+                  filename: slugifyFilename(`peticao-${tipo}-${poloAtivo || 'requerente'}`),
+                  title: `Petição — ${tipo}`,
+                  subtitle: `${poloAtivo || 'Requerente'} × ${poloPassivo || 'Requerido'}`,
+                  sections: secoes.map((s) => ({ titulo: s.titulo, conteudo: s.conteudo })),
+                  footer: 'Gerado por PetiBot (Plataforma Jurídico-Contábil). Revise antes de protocolar.',
+                })
+              }
+            >
+              Exportar .docx
+            </Button>
           </div>
 
           {/* Rail: enrichment */}

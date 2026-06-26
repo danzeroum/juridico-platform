@@ -34,7 +34,7 @@ const RECENT_ALERTS = [
 ]
 
 export default function InicioPage() {
-  const { demoMode } = useShell()
+  const { demoMode, setDemoMode } = useShell()
   const router = useRouter()
 
   if (!demoMode) {
@@ -44,7 +44,7 @@ export default function InicioPage() {
         title="Nenhum dado ingerido"
         description="Conecte as APIs e ingira dados para ver o dashboard."
         demoMode
-        action={{ label: 'Ativar dados de demonstração', onClick: () => {} }}
+        action={{ label: 'Ativar dados de demonstração', onClick: () => setDemoMode(true) }}
       />
     )
   }

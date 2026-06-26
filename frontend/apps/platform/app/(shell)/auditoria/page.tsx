@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Card, SectionLabel, MerklePanel, Badge } from '@juridico/ui'
 import type { MerkleProof } from '@juridico/ui'
+import { downloadJson } from '@/lib/export/documents'
 
 const MOCK_DECISIONS = [
   { request_id: 'req_demo_001', product: 'LegalScore', cnpj: '00.000.000/0001-91', ts: '2026-06-17 14:32' },
@@ -59,8 +60,15 @@ export default function AuditoriaPage() {
             merkleRoot="sha256:root1a2b3c4d5e6f7890abcdef..."
             proof={MOCK_PROOF}
             isIntact
-            onReverify={() => {}}
-            onExportPdf={() => {}}
+            onExportPdf={() =>
+              downloadJson(`trilha-${decision.request_id}`, {
+                request_id: decision.request_id,
+                product: decision.product,
+                leaf_hash: 'sha256:a3f9e21b04cc7d88bce45f12abc...',
+                merkle_root: 'sha256:root1a2b3c4d5e6f7890abcdef...',
+                proof: MOCK_PROOF,
+              })
+            }
           />
         </div>
       </div>
