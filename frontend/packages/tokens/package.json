@@ -11,6 +11,7 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "tailwindcss": "^3.4.15"
   }
 }

@@ -71,15 +71,23 @@ async def login(request: LoginRequest) -> TokenResponse:
         ) from None
 
     # TODO (Fase 1): validar request.username + request.password contra tenant.users
-    # Por ora: aceitar dev-tenant sem validação de senha (SOMENTE em dev)
+    # com hash (argon2/bcrypt) e resolver tenant_id pelo slug.
+    #
+    # Enquanto a validação real de credenciais não existe, FALHAR FECHADO: só
+    # emitir token em ambientes de desenvolvimento/teste. O default é "production"
+    # de propósito — ENV ausente NÃO pode habilitar o bypass de senha.
     import os
-    if os.getenv("ENV", "dev") != "dev" and request.tenant_slug == "dev-tenant":
+    env = os.getenv("ENV", "production").strip().lower()
+    if env not in ("dev", "development", "test"):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais inválidas.",
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                "Autenticação por senha ainda não habilitada para este ambiente. "
+                "Implemente a validação contra tenant.users antes de ir a produção."
+            ),
         )
 
-    # Em produção: buscar tenant_id do DB pelo slug
+    # Dev/teste apenas: emite token sem validar senha (NUNCA em produção).
     tenant_id = "00000000-0000-0000-0000-000000000001"  # dev tenant
 
     token = issue_token(
