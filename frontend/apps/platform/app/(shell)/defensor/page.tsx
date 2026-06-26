@@ -20,6 +20,7 @@ import { useShell } from '@/app/context/shell'
 import { defensorApi, type ProtocoloResult } from '@/lib/api/defensor'
 import { ApiError } from '@/lib/api/client'
 import { ApiErrorBanner } from '@/components/ApiErrorBanner'
+import { downloadDoc, slugifyFilename } from '@/lib/export/documents'
 
 const DEMO_API_ERROR = new ApiError(503, {
   type: 'https://juridico.io/errors/circuit-breaker',
@@ -273,7 +274,20 @@ export default function DefensorPage() {
                 )
               })}
               <div className="flex items-center gap-3 self-start">
-                <Button variant="secondary">⤓ Exportar .docx</Button>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    downloadDoc({
+                      filename: slugifyFilename(`defesa-${reclamante || 'reclamante'}`),
+                      title: 'Defesa do consumidor',
+                      subtitle: `${reclamante || 'Reclamante'} × ${reclamada || 'Reclamada'} · ${canal}`,
+                      sections: secoes.map((s) => ({ titulo: s.titulo, conteudo: s.conteudo })),
+                      footer: 'Gerado pelo agente Defensor (Plataforma Jurídico-Contábil). Revise antes de protocolar.',
+                    })
+                  }
+                >
+                  ⤓ Exportar .docx
+                </Button>
                 <RbacGate role={role} requires="analyst">
                   <Button onClick={protocolar}>Protocolar defesa →</Button>
                 </RbacGate>

@@ -93,12 +93,13 @@ export function Sidebar() {
             <p className="text-[11px] font-medium text-white truncate">Usuário</p>
             <p className="text-[10px] font-mono capitalize" style={{ color: '#9fb0c5' }}>{role}</p>
           </div>
-          <button
+          <a
+            href="/api/auth/logout"
             aria-label="Sair"
             className="text-[#9fb0c5] hover:text-white transition-colors"
           >
             <LogOut className="w-4 h-4" />
-          </button>
+          </a>
         </div>
       </div>
     </nav>

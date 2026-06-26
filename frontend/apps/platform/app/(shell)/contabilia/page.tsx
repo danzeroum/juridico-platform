@@ -9,6 +9,7 @@ import { lagToFreshnessBand } from '@juridico/tokens'
 import { useShell } from '@/app/context/shell'
 import { contabiliaApi } from '@/lib/api/contabilia'
 import { ApiErrorBanner } from '@/components/ApiErrorBanner'
+import { downloadDoc, slugifyFilename } from '@/lib/export/documents'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, Cell, Tooltip } from 'recharts'
 import { ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { cn } from '@juridico/ui'
@@ -191,9 +192,24 @@ export default function ContabilIAPage() {
               </div>
               <div className="flex items-center gap-3">
                 <FreshnessSeal source="SICONFI" lagDays={365} band={lagToFreshnessBand(365)} />
-                <Button variant="secondary" size="sm">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() =>
+                    downloadDoc({
+                      filename: slugifyFilename(`laudo-${reportId}`),
+                      title: 'Laudo de auditoria contábil',
+                      subtitle: `report_id: ${reportId} · fonte SICONFI`,
+                      sections: findings.map((f) => ({
+                        titulo: `${f.id} — ${f.label} [${f.status}]`,
+                        conteudo: f.evidence,
+                      })),
+                      footer: 'Gerado por ContabilIA (Plataforma Jurídico-Contábil). Achados estatísticos — não substituem perícia.',
+                    })
+                  }
+                >
                   <Download className="w-3.5 h-3.5" aria-hidden />
-                  Baixar PDF
+                  Baixar laudo (.doc)
                 </Button>
               </div>
             </div>

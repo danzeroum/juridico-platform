@@ -1,5 +1,7 @@
+'use client'
 import { Card, CardHeader, SectionLabel, Badge, Table, Thead, Tbody, Tr, Th, Td, Button } from '@juridico/ui'
 import { Download, Shield, Database, Trash2 } from 'lucide-react'
+import { downloadJson } from '@/lib/export/documents'
 
 const ROPA = [
   { fonte: 'Receita Federal', classe: 'publico', base: 'Interesse legítimo', finalidade: 'Scoring PJ', lag: '2d' },
@@ -22,18 +24,39 @@ export default function ConformidadePage() {
 
       {/* Rights cards */}
       <div className="grid grid-cols-3 gap-4">
-        {[
-          { icon: Database, title: 'Acesso', desc: 'Exportar todos os dados processados deste tenant em JSON.', action: 'Exportar dados' },
-          { icon: Download, title: 'Portabilidade', desc: 'Download em formato JSON estruturado (RFC 8259) de todas as decisões.', action: 'Baixar JSON' },
-          { icon: Trash2, title: 'Eliminação', desc: 'Crypto-shredding: chave de tenant rotacionada, dados inacessíveis. Ledger permanece read-only.', action: 'Solicitar eliminação' },
-        ].map((right) => (
+        {([
+          {
+            icon: Database, title: 'Acesso', action: 'Exportar dados',
+            desc: 'Exportar todos os dados processados deste tenant em JSON.',
+            onClick: () => downloadJson('dados-tenant', { tenant: 'demo', exported_at: new Date().toISOString(), ropa: ROPA }),
+          },
+          {
+            icon: Download, title: 'Portabilidade', action: 'Baixar JSON',
+            desc: 'Download em formato JSON estruturado (RFC 8259) de todas as decisões.',
+            onClick: () => downloadJson('decisoes', { tenant: 'demo', exported_at: new Date().toISOString(), decisoes: [] }),
+          },
+          {
+            icon: Trash2, title: 'Eliminação', action: 'Solicitar eliminação',
+            desc: 'Crypto-shredding: chave de tenant rotacionada, dados inacessíveis. Ledger permanece read-only.',
+            disabled: true, hint: 'Ação irreversível — requer aprovação do DPO (endpoint em implementação).',
+          },
+        ] as const).map((right) => (
           <Card key={right.title} padding="md" className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <right.icon className="w-4 h-4 text-accent" aria-hidden />
               <SectionLabel>{right.title}</SectionLabel>
             </div>
             <p className="text-[12px] text-textSecondary">{right.desc}</p>
-            <Button variant="secondary" size="sm" className="self-start">{right.action}</Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="self-start"
+              onClick={'onClick' in right ? right.onClick : undefined}
+              disabled={'disabled' in right ? right.disabled : undefined}
+              title={'hint' in right ? right.hint : undefined}
+            >
+              {right.action}
+            </Button>
           </Card>
         ))}
       </div>
@@ -42,7 +65,11 @@ export default function ConformidadePage() {
       <Card padding="none">
         <div className="px-5 py-3 border-b border-[#f0f2f5] flex items-center justify-between">
           <SectionLabel>ROPA — Registro de operações de tratamento</SectionLabel>
-          <Button variant="secondary" size="sm">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => downloadJson('trilha-anpd', { exported_at: new Date().toISOString(), ropa: ROPA })}
+          >
             <Download className="w-3.5 h-3.5" aria-hidden />
             Exportar trilha (ANPD)
           </Button>
