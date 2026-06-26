@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#13181f;background:#f5f6f8;-webkit-font-smoothing:antialiased}
+  ::selection{background:#bcd2fb}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.32}}
+  @keyframes fadeup{from{transform:translateY(5px)}to{transform:none}}
+  @keyframes shimmer{0%{background-position:-280px 0}100%{background-position:280px 0}}
+  .skel{background:linear-gradient(90deg,#eef1f4 25%,#f6f8fa 50%,#eef1f4 75%);background-size:560px 100%;animation:shimmer 1.3s linear infinite;border-radius:6px}
+  @media (prefers-reduced-motion: reduce){.skel{animation:none}}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#c4ccd6;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-track{background:transparent}
+  .feedline{animation:fadeup .32s ease}
+  .pulsedot{animation:pulse 1.4s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){.feedline{animation:none}.pulsedot{animation:none}}
+</style>
+</helmet>
+
+<div style="display:grid;grid-template-columns:238px 1fr;height:100vh;background:#f5f6f8">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside style="background:#0c1c33;color:#c7d2e2;display:flex;flex-direction:column;height:100vh;overflow:hidden">
+    <div style="padding:18px 18px 14px;display:flex;align-items:center;gap:11px">
+      <div style="width:30px;height:30px;border-radius:7px;background:#2f6fed;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;color:#fff;flex:none">J</div>
+      <div style="line-height:1.1">
+        <div style="color:#fff;font-weight:600;font-size:13.5px">Jurídico-Contábil</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6f88b3">v1 · gateway</div>
+      </div>
+    </div>
+
+    <button onClick="{{ noop }}" style="margin:12px 12px 6px;padding:9px 11px;background:rgba(17,37,66,.5);border:1px solid #21385f;border-radius:8px;display:flex;align-items:center;gap:9px;cursor:pointer;text-align:left" style-hover="background:rgba(20,40,72,.8)">
+      <div style="width:26px;height:26px;border-radius:6px;background:linear-gradient(135deg,#2f6fed,#5a86f0);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff;flex:none">MA</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;color:#fff;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Mendes &amp; Associados</div>
+        <div style="font-size:10px;color:#7e95bd;font-family:'IBM Plex Mono',monospace">tenant · advocacia</div>
+      </div>
+      <span style="color:#6f88b3;font-size:10px">⇅</span>
+    </button>
+
+    <nav style="flex:1;overflow-y:auto;padding:10px 10px 16px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#5f78a0;padding:8px 8px 6px">PLATAFORMA</div>
+      <sc-for list="{{ navPlatform }}" as="item" hint-placeholder-count="5">
+        <button onClick="{{ noop }}" style="{{ item.style }}">
+          <span style="{{ item.codeStyle }}">{{ item.code }}</span>
+          <span style="flex:1;text-align:left">{{ item.label }}</span>
+          <sc-if value="{{ item.count }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;background:#c4382f;color:#fff;border-radius:20px;padding:1px 7px">{{ item.count }}</span></sc-if>
+        </button>
+      </sc-for>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#5f78a0;padding:16px 8px 6px">PRODUTOS · LENTES</div>
+      <sc-for list="{{ navProducts }}" as="item" hint-placeholder-count="10">
+        <button onClick="{{ noop }}" style="{{ item.style }}">
+          <span style="{{ item.codeStyle }}">{{ item.code }}</span>
+          <span style="flex:1;text-align:left">{{ item.label }}</span>
+          <sc-if value="{{ item.badge }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:8.5px;font-weight:600;letter-spacing:.04em;background:#1c3a63;color:#7fb0ff;border-radius:4px;padding:1px 5px">{{ item.badge }}</span></sc-if>
+        </button>
+      </sc-for>
+    </nav>
+
+    <div style="padding:11px 12px;border-top:1px solid #1a2d4e;display:flex;align-items:center;gap:9px">
+      <div style="width:30px;height:30px;border-radius:50%;background:#274472;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#fff">AM</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Ana Mendes</div>
+        <div style="font-size:10px;color:#7e95bd;font-family:'IBM Plex Mono',monospace">Advogada · {{ roleLabel }}</div>
+      </div>
+      <span style="color:#7e95bd;font-size:13px">⏻</span>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div style="display:flex;flex-direction:column;height:100vh;overflow:hidden">
+    <!-- TOPBAR -->
+    <header style="height:58px;background:#fff;border-bottom:1px solid #e3e7ec;display:flex;align-items:center;gap:16px;padding:0 22px;flex:none">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b7480">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa3af">/</span>
+        <span style="color:#13181f;font-weight:600">Defensor</span>
+      </div>
+      <div style="flex:1;max-width:420px;margin-left:8px;position:relative">
+        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9aa3af;font-size:13px">⌕</span>
+        <input placeholder="Buscar CNPJ, órgão, processo…" style="width:100%;height:36px;border:1px solid #e3e7ec;border-radius:8px;padding:0 12px 0 32px;font-size:13px;font-family:inherit;background:#f7f8fa" style-focus="outline:none;border-color:#2f6fed;background:#fff;box-shadow:0 0 0 3px #e9f0fd">
+      </div>
+      <div style="flex:1"></div>
+      <button onClick="{{ toggleMock }}" title="Alternar entre dados de demonstração e plataforma limpa" style="{{ mockBtnStyle }}">
+        <span style="{{ mockTrackStyle }}"><span style="{{ mockKnobStyle }}"></span></span>
+        <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.05"><span style="font-size:11.5px;font-weight:600;color:#13181f">{{ mockText }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#9aa3af">demo · {{ mockSub }}</span></span>
+      </button>
+      <div title="Perfil de acesso (RBAC)" style="display:flex;align-items:center;gap:2px;background:#f1f3f6;border:1px solid #e3e7ec;border-radius:8px;padding:3px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#9aa3af;padding:0 6px 0 4px;letter-spacing:.05em">RBAC</span>
+        <sc-for list="{{ roleTabs }}" as="r" hint-placeholder-count="3"><button onClick="{{ r.go }}" style="{{ r.style }}">{{ r.label }}</button></sc-for>
+      </div>
+      <div title="Rate limit do tenant" style="display:flex;align-items:center;gap:8px;padding:6px 11px;border:1px solid #e3e7ec;border-radius:8px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6b7480">API</span>
+        <div style="width:64px;height:6px;background:#eceff3;border-radius:4px;overflow:hidden"><div style="width:42%;height:100%;background:#1f8a5b;border-radius:4px"></div></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#13181f">42<span style="color:#9aa3af">/100</span></span>
+      </div>
+    </header>
+
+    <!-- SCROLL AREA -->
+    <main style="flex:1;overflow-y:auto;padding:26px 28px 64px">
+      <div style="max-width:1200px;margin:0 auto">
+
+        <!-- MODULE HEADER -->
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:4px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;padding:3px 7px;border-radius:5px;background:#f7f8fa;color:#48515e;border:1px solid #e7eaee">DF</span>
+          <h1 style="font-size:20px;font-weight:700;letter-spacing:-.01em;color:#13181f">Defensor</h1>
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:3px 9px;border-radius:20px;background:#e8effe;color:#2f6fed;border:1px solid #cddcf8">
+            <span style="width:5px;height:5px;border-radius:50%;background:#2f6fed" class="pulsedot"></span>AGENTE
+          </span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:2px;background:#f1f3f6;border:1px solid #e3e7ec;border-radius:9px;padding:3px">
+            <sc-for list="{{ viewTabs }}" as="v" hint-placeholder-count="2"><button onClick="{{ v.go }}" style="{{ v.style }}">{{ v.label }}</button></sc-for>
+          </div>
+        </div>
+        <p style="font-size:13px;color:#76808d;margin-bottom:18px;max-width:680px;line-height:1.5">Classifica o caso, reúne subsídios, casa jurisprudência e redige a defesa — com proveniência verificável em cada afirmação.</p>
+
+        <!-- VIEWER BANNER -->
+        <sc-if value="{{ isViewer }}" hint-placeholder-val="{{ false }}">
+          <div role="banner" style="display:flex;align-items:center;gap:9px;background:#f7f8fa;border:1px solid #e7eaee;border-radius:9px;padding:10px 14px;margin-bottom:16px">
+            <span style="font-size:13px;color:#76808d">🔒</span>
+            <span style="font-size:12.5px;color:#48515e"><strong style="color:#13181f">Modo leitura (Leitor)</strong> · você visualiza a defesa e o registro do agente. Ações de análise (Acionar agente · Protocolar) exigem perfil Analista ou Admin.</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFlow }}" hint-placeholder-val="{{ true }}">
+        <!-- STEP INDICATOR -->
+        <div style="display:flex;align-items:center;background:#fff;border:1px solid #e7eaee;border-radius:11px;padding:13px 18px;margin-bottom:20px">
+          <sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+            <button onClick="{{ st.go }}" style="{{ st.btnStyle }}">
+              <span style="{{ st.circleStyle }}">{{ st.mark }}</span>
+              <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.15">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.08em;color:#9aa3af">PASSO {{ st.n }}</span>
+                <span style="{{ st.labelStyle }}">{{ st.label }}</span>
+              </span>
+            </button>
+            <span style="{{ st.connStyle }}"></span>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <!-- =================== FASE 1 — ENTRADA =================== -->
+        <sc-if value="{{ isEntrada }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:20px">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <label style="font-size:12px;font-weight:600;color:#48515e">Descrição do caso</label>
+              <textarea onChange="{{ setDescricao }}" value="{{ descricao }}" rows="5" placeholder="Descreva a reclamação / o caso (50–5.000 caracteres)…" style="width:100%;border:1px solid #d3d8df;border-radius:8px;padding:11px 13px;font-size:13px;font-family:inherit;line-height:1.55;color:#13181f;resize:vertical;background:#fff" style-focus="outline:none;border-color:#2f6fed;box-shadow:0 0 0 3px #e2ebfd"></textarea>
+              <div style="display:flex;justify-content:flex-end"><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa3af">{{ charCount }} / 5.000</span></div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-top:6px">
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <label style="font-size:12px;font-weight:600;color:#48515e">Canal</label>
+                <div style="position:relative">
+                  <select onChange="{{ setCanal }}" value="{{ canal }}" style="appearance:none;width:100%;height:40px;border:1px solid #d3d8df;border-radius:8px;padding:0 28px 0 12px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer" style-focus="outline:none;border-color:#2f6fed;box-shadow:0 0 0 3px #e2ebfd">
+                    <option>PROCON</option><option>CONSUMIDOR_GOV</option><option>OUVIDORIA</option><option>CONTENCIOSO</option>
+                  </select>
+                  <span style="position:absolute;right:11px;top:50%;transform:translateY(-50%);color:#9aa3af;pointer-events:none;font-size:10px">▼</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <label style="font-size:12px;font-weight:600;color:#48515e">Tipo de caso</label>
+                <div style="position:relative">
+                  <select onChange="{{ setTipo }}" value="{{ tipo }}" style="appearance:none;width:100%;height:40px;border:1px solid #d3d8df;border-radius:8px;padding:0 28px 0 12px;font-size:13px;font-family:inherit;background:#fff;cursor:pointer" style-focus="outline:none;border-color:#2f6fed;box-shadow:0 0 0 3px #e2ebfd">
+                    <option>CONSUMERISTA</option><option>CIVEL</option><option>TRABALHISTA</option><option>TRIBUTARIO</option><option>PREVIDENCIARIO</option><option>ADMINISTRATIVO</option>
+                  </select>
+                  <span style="position:absolute;right:11px;top:50%;transform:translateY(-50%);color:#9aa3af;pointer-events:none;font-size:10px">▼</span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <label style="font-size:12px;font-weight:600;color:#48515e">Reclamante</label>
+                <input value="{{ reclamante }}" onChange="{{ setReclamante }}" placeholder="Nome do reclamante" style="height:40px;border:1px solid #d3d8df;border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;background:#fff" style-focus="outline:none;border-color:#2f6fed;box-shadow:0 0 0 3px #e2ebfd">
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <label style="font-size:12px;font-weight:600;color:#48515e">Reclamada</label>
+                <input value="{{ reclamada }}" onChange="{{ setReclamada }}" placeholder="Nome da empresa" style="height:40px;border:1px solid #d3d8df;border-radius:8px;padding:0 12px;font-size:13px;font-family:inherit;background:#fff" style-focus="outline:none;border-color:#2f6fed;box-shadow:0 0 0 3px #e2ebfd">
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:13px;margin-top:18px">
+              <sc-if value="{{ canRun }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ acionar }}" style="display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 20px;background:#2f6fed;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer" style-hover="background:#2660d8">⚡ Acionar agente</button>
+              </sc-if>
+              <sc-if value="{{ isViewer }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-flex;align-items:center;gap:6px;height:42px;padding:0 16px;border-radius:8px;background:#f7f8fa;color:#76808d;border:1px solid #e7eaee;font-size:12.5px;font-weight:500">🔒 exige perfil Analista</span>
+              </sc-if>
+              <span style="font-size:12px;color:#9aa3af;font-family:'IBM Plex Mono',monospace">CONSUMERISTA · CONSUMIDOR_GOV · R$ 159,60</span>
+            </div>
+          </div>
+
+          <!-- EMPTY STATE -->
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:54px 24px;text-align:center;margin-top:18px">
+            <div style="width:52px;height:52px;border-radius:50%;background:#f7f8fa;display:flex;align-items:center;justify-content:center;font-size:24px">🤖</div>
+            <div>
+              <p style="font-size:15px;font-weight:600;color:#13181f">Preencha o formulário e clique em Acionar agente</p>
+              <p style="font-size:13px;color:#76808d;margin-top:3px;max-width:420px">O agente executa o pipeline ao vivo: classificação → subsídios → jurisprudência → defesa → protocolo.</p>
+              <sc-if value="{{ noMock }}" hint-placeholder-val="{{ false }}"><p style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#9aa3af;margin-top:9px">modo limpo · sem conexão com as APIs</p></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- =================== FASE 2 — EXECUÇÃO =================== -->
+        <sc-if value="{{ isExec }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="display:flex;align-items:center;gap:2px;background:#f1f3f6;border:1px solid #e3e7ec;border-radius:9px;padding:3px">
+                <button onClick="{{ setTreatA }}" style="{{ treatAStyle }}">A · Terminal</button>
+                <button onClick="{{ setTreatB }}" style="{{ treatBStyle }}">B · Timeline</button>
+              </div>
+              <span style="font-size:12px;color:#76808d">{{ treatHint }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:11px">
+              <span style="display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:{{ runColor }}"><span style="width:7px;height:7px;border-radius:50%;background:{{ runColor }}" class="{{ runPulseClass }}"></span>{{ runText }}</span>
+              <button onClick="{{ rerun }}" style="display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;background:#fff;color:#48515e;border:1px solid #d3d8df;border-radius:8px;font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer" style-hover="background:#f7f8fa">↻ re-rodar</button>
+            </div>
+          </div>
+
+          <!-- TREATMENT A — DARK TERMINAL -->
+          <sc-if value="{{ treatA }}" hint-placeholder-val="{{ true }}">
+            <div style="border-radius:11px;overflow:hidden;border:1px solid #1a2d4e;max-width:760px">
+              <div style="display:flex;align-items:center;gap:8px;padding:11px 15px;background:#0c1c33">
+                <span style="width:9px;height:9px;border-radius:50%;background:#475569"></span>
+                <span style="width:9px;height:9px;border-radius:50%;background:#475569"></span>
+                <span style="width:9px;height:9px;border-radius:50%;background:#eab308" class="{{ runPulseClass }}"></span>
+                <span style="margin-left:8px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.13em;color:#9fb0c5">DEFENSOR · AGENT · LIVE</span>
+                <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#5a6b85">caso #DF-2026-0418</span>
+              </div>
+              <div style="background:#08111f;padding:15px 16px;display:flex;flex-direction:column;gap:11px;min-height:280px">
+                <sc-for list="{{ feedA }}" as="ev" hint-placeholder-count="6">
+                  <div class="feedline" style="display:flex;align-items:flex-start;gap:11px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#46566f;padding-top:1px;flex:none">{{ ev.ts }}</span>
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span style="width:8px;height:8px;border-radius:50%;background:{{ ev.dotColor }};flex:none" class="{{ ev.pulseClass }}"></span>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#cdd9ea;font-weight:500">{{ ev.evento }}</span>
+                      </div>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#5a6b85;padding-left:16px">{{ ev.detalhe }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="background:#0a1526;border-top:1px solid #1a2d4e;padding:9px 16px;display:flex;align-items:center;gap:18px">
+                <span style="display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5a6b85"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e"></span>ok</span>
+                <span style="display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5a6b85"><span style="width:7px;height:7px;border-radius:50%;background:#eab308" class="pulsedot"></span>running</span>
+                <span style="display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#5a6b85"><span style="width:7px;height:7px;border-radius:50%;background:#64748b"></span>pending</span>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- TREATMENT B — LIGHT TIMELINE -->
+          <sc-if value="{{ treatB }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:8px 22px;max-width:760px">
+              <sc-for list="{{ feedB }}" as="ev" hint-placeholder-count="8">
+                <div style="display:flex;gap:15px;align-items:stretch">
+                  <div style="display:flex;flex-direction:column;align-items:center;flex:none;width:24px">
+                    <span style="{{ ev.bNodeStyle }}" class="{{ ev.bNodePulse }}">{{ ev.bMark }}</span>
+                    <span style="{{ ev.bConnStyle }}"></span>
+                  </div>
+                  <div style="flex:1;padding:4px 0 18px">
+                    <div style="display:flex;align-items:center;gap:9px">
+                      <span style="font-size:13.5px;font-weight:600;color:{{ ev.bTitleColor }}">{{ ev.title }}</span>
+                      <span style="{{ ev.bSealStyle }}">{{ ev.bSeal }}</span>
+                    </div>
+                    <p style="font-size:12px;color:#8a93a0;margin-top:2px">{{ ev.bDetalhe }}</p>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ feedDone }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:13px;margin-top:18px">
+              <button onClick="{{ verResultado }}" style="display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 20px;background:#2f6fed;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer" style-hover="background:#2660d8">Ver resultado →</button>
+              <span style="font-size:12.5px;color:#1f8a5b;font-weight:500">✓ Defesa pronta · 4 seções · 12.480 caracteres</span>
+            </div>
+          </sc-if>
+        </sc-if>
+
+        <!-- =================== FASE 3 — RESULTADO =================== -->
+        <sc-if value="{{ isResult }}" hint-placeholder-val="{{ false }}">
+          <!-- scenario control -->
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px;flex-wrap:wrap">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;color:#9aa3af">CENÁRIO</span>
+            <div style="display:flex;gap:2px;background:#f1f3f6;border:1px solid #e3e7ec;border-radius:9px;padding:3px">
+              <sc-for list="{{ scenTabs }}" as="t" hint-placeholder-count="4"><button onClick="{{ t.go }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+            </div>
+          </div>
+
+          <!-- degradation / error banners -->
+          <sc-if value="{{ showDegBanner }}" hint-placeholder-val="{{ false }}">
+            <div role="alert" style="display:flex;align-items:flex-start;gap:11px;border:1px solid #ecdcae;background:#fbf6e9;border-radius:8px;padding:12px 15px;margin-bottom:16px">
+              <span style="width:8px;height:8px;margin-top:5px;border-radius:50%;background:#b07d00;flex:none" class="pulsedot"></span>
+              <div><p style="font-size:13px;font-weight:600;color:#7a5800">{{ degTitle }}</p><p style="font-size:12px;color:#7a5800;opacity:.82;margin-top:1px">{{ degDetail }}</p></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ showErrBanner }}" hint-placeholder-val="{{ false }}">
+            <div role="alert" style="display:flex;gap:12px;border:1px solid #f0c2bd;background:#fae3e1;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+              <span style="font-size:15px;flex:none">⚠</span>
+              <div style="min-width:0">
+                <p style="font-size:13px;font-weight:600;color:#8f2a22">Serviço indisponível<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.6;margin-left:8px">503</span></p>
+                <p style="font-size:12.5px;color:#8f2a22;opacity:.85;margin-top:2px">O serviço do agente está temporariamente indisponível (circuit breaker). A defesa exibida é o último rascunho válido.</p>
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8f2a22;opacity:.5;margin-top:4px">instance: /api/v1/defensor/run · contract_version: 2026-05</p>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- optional trust header -->
+          <sc-if value="{{ showTrust }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e7eaee;border-radius:11px;padding:13px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <span style="display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#6b7480">🛡 Frescor das fontes</span>
+              <sc-for list="{{ freshSeals }}" as="f" hint-placeholder-count="3"><span style="{{ f.style }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ f.dot }}"></span>{{ f.label }}</span></sc-for>
+            </div>
+          </sc-if>
+
+          <div style="display:grid;grid-template-columns:1.65fr 1fr;gap:18px;align-items:start">
+            <!-- COLUNA PRINCIPAL — DEFESA -->
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <sc-for list="{{ secoes }}" as="sec" hint-placeholder-count="4">
+                <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px;flex-wrap:wrap">
+                    <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#6b7480">{{ sec.titulo }}</span>
+                    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+                      <span style="{{ provStyle }}white-space:nowrap">{{ provLabel }}</span>
+                      <sc-for list="{{ sec.chips }}" as="c" hint-placeholder-count="0"><a href="{{ c.href }}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:500;background:#e8effe;color:#2f6fed;border:1px solid #cddcf8;text-decoration:none;white-space:nowrap" style-hover="background:#eef4fe">{{ c.label }}<span style="opacity:.55;font-size:9px">↗</span></a></sc-for>
+                    </div>
+                  </div>
+                  <sc-if value="{{ sec.showGuard }}" hint-placeholder-val="{{ false }}">
+                    <div role="alert" style="display:flex;align-items:center;gap:8px;background:#fbf4e2;border:1px solid #ecdcae;border-radius:6px;padding:7px 11px;margin-bottom:11px">
+                      <span style="font-size:12px;color:#b07d00">⚠</span><span style="font-size:12px;color:#7a5800;font-weight:500">{{ sec.guardText }}</span>
+                    </div>
+                  </sc-if>
+                  <div contenteditable="true" style="font-size:13px;color:#13181f;line-height:1.62;outline:none;border-radius:6px;padding:6px;margin:-6px" style-focus="box-shadow:0 0 0 2px #cddcf8;background:#fcfdff">{{ sec.conteudo }}</div>
+                </div>
+              </sc-for>
+
+              <div style="display:flex;align-items:center;gap:11px;margin-top:2px">
+                <button onClick="{{ noop }}" style="height:40px;padding:0 16px;background:#fff;color:#13181f;border:1px solid #d3d8df;border-radius:8px;font-size:13px;font-weight:500;font-family:inherit;cursor:pointer" style-hover="background:#f7f8fa">⤓ Exportar .docx</button>
+                <sc-if value="{{ canRun }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ protocolar }}" style="height:40px;padding:0 18px;background:#2f6fed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer" style-hover="background:#2660d8">Protocolar defesa →</button>
+                </sc-if>
+                <sc-if value="{{ isViewer }}" hint-placeholder-val="{{ false }}">
+                  <span style="display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:8px;background:#f7f8fa;color:#76808d;border:1px solid #e7eaee;font-size:12px;font-weight:500">🔒 exige perfil Analista</span>
+                </sc-if>
+              </div>
+            </div>
+
+            <!-- RAIL — ENRIQUECIMENTO -->
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:16px">
+                <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#6b7480;margin-bottom:13px">Enriquecimento</p>
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <div>
+                    <p style="font-size:11px;color:#76808d;margin-bottom:5px">Canal de protocolo</p>
+                    <span style="display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500;background:#e8effe;color:#2f6fed;border:1px solid #cddcf8;font-family:'IBM Plex Mono',monospace">{{ canal }}</span>
+                  </div>
+                  <div style="border-top:1px solid #f0f2f5;padding-top:13px">
+                    <p style="font-size:11px;color:#76808d;margin-bottom:4px">Histórico do reclamante</p>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:#13181f">2</span>
+                    <span style="font-size:11px;color:#76808d;margin-left:5px">casos anteriores</span>
+                  </div>
+                  <div style="border-top:1px solid #f0f2f5;padding-top:13px">
+                    <p style="font-size:11px;color:#76808d;margin-bottom:5px">Próximo responsável</p>
+                    <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500;background:#fbf4e2;color:#7a5800;border:1px solid #ecdcae">🤖 agente · handoff humano opcional</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:16px">
+                <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#6b7480;margin-bottom:11px">RAG · precedentes</p>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:{{ ragDot }}" class="{{ ragPulse }}"></span>
+                  <span style="font-size:12.5px;font-weight:500;color:{{ ragColor }}">{{ ragStatus }}</span>
+                </div>
+                <p style="font-size:11.5px;color:#76808d;margin-top:5px">{{ ragDetail }}</p>
+              </div>
+
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:16px">
+                <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#6b7480;margin-bottom:4px">Reputação · Consumidor.gov</p>
+                <p style="font-size:12.5px;font-weight:600;color:#13181f;margin-bottom:12px">Telecom Brasil Conecta S.A.</p>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+                  <div><p style="font-size:10px;color:#76808d">Reclamações</p><p style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:#13181f">8.432</p></div>
+                  <div><p style="font-size:10px;color:#76808d">Resolução</p><p style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:#cf6a1f">71%</p></div>
+                  <div><p style="font-size:10px;color:#76808d">Nota média</p><p style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:#c4382f">2,8</p></div>
+                </div>
+                <div style="margin-top:11px;display:inline-flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#0f5c3a;background:#f1f9f5;border:1px solid #bfe3d0;border-radius:5px;padding:3px 8px"><span style="width:6px;height:6px;border-radius:50%;background:#1f8a5b"></span>fonte · dados abertos · 6d</div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- =================== FASE 4 — PROTOCOLO =================== -->
+        <sc-if value="{{ isProto }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:680px">
+            <!-- mode indicator -->
+            <div style="display:flex;align-items:center;gap:10px;border-radius:9px;padding:11px 15px;margin-bottom:18px;{{ modeBoxStyle }}">
+              <span style="font-size:14px">{{ modeIcon }}</span>
+              <div><p style="font-size:12.5px;font-weight:600;{{ modeTextStyle }}">{{ modeTitle }}</p><p style="font-size:11.5px;opacity:.82;{{ modeTextStyle }}">{{ modeDetail }}</p></div>
+            </div>
+
+            <!-- 5-state switcher -->
+            <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px;flex-wrap:wrap">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;color:#9aa3af">ESTADO DO PROTOCOLO</span>
+              <div style="display:flex;gap:3px;flex-wrap:wrap">
+                <sc-for list="{{ protoTabs }}" as="t" hint-placeholder-count="5"><button onClick="{{ t.go }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+              </div>
+            </div>
+
+            <!-- protocol status card -->
+            <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:20px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+                <span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:#6b7480">Protocolo · {{ canal }}</span>
+                <span style="{{ protoBadgeStyle }}">{{ protoStatus }}</span>
+              </div>
+              <sc-if value="{{ protoHasNumber }}" hint-placeholder-val="{{ true }}">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa3af;margin-bottom:3px">número de protocolo</p>
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:#13181f">{{ protoNumber }}</p>
+              </sc-if>
+              <p style="font-size:13px;color:#48515e;line-height:1.55;margin-top:12px">{{ protoMessage }}</p>
+              <sc-if value="{{ protoHasLink }}" hint-placeholder-val="{{ false }}">
+                <a href="#" style="display:inline-flex;align-items:center;gap:6px;margin-top:13px;font-size:12.5px;font-weight:600;color:#2f6fed;text-decoration:none">Abrir no portal Consumidor.gov ↗</a>
+              </sc-if>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:16px;padding-top:13px;border-top:1px solid #f0f2f5">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa3af">modo:</span>
+                <span style="{{ modeChipStyle }}">{{ modeChip }}</span>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa3af;margin-left:auto">enviado_em: {{ protoTime }}</span>
+              </div>
+            </div>
+
+            <p style="display:flex;align-items:center;gap:7px;font-size:12px;color:#8a93a0;margin-top:14px">🔒 Ação externa sensível — confirme o modo (simulação / real) antes de qualquer envio. Submissões reais exigem credenciais do portal configuradas pelo Admin.</p>
+
+            <button onClick="{{ backResult }}" style="margin-top:18px;display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px;background:#fff;color:#48515e;border:1px solid #d3d8df;border-radius:8px;font-size:12.5px;font-weight:500;font-family:inherit;cursor:pointer" style-hover="background:#f7f8fa">← Voltar à defesa</button>
+          </div>
+        </sc-if>
+
+        <!-- =================== HANDOFF DEV =================== -->
+        <sc-if value="{{ isHandoff }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:26px">
+
+          <div style="display:flex;align-items:center;gap:10px;background:#0c1c33;border-radius:11px;padding:14px 18px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.1em;color:#7fb0ff">PACOTE DE HANDOFF</span>
+            <span style="font-size:12.5px;color:#aab9d1">estados, specs de componentes e motion — referência para a implementação em <span style="font-family:'IBM Plex Mono',monospace;color:#cdd9ea">@juridico/ui</span></span>
+          </div>
+
+          <!-- 1. LOADING / SKELETON -->
+          <div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#2f6fed">01</span>
+              <h3 style="font-size:15px;font-weight:700;color:#13181f">Estado · carregando</h3>
+              <span style="font-size:12px;color:#9aa3af">Skeleton enquanto <span style="font-family:'IBM Plex Mono',monospace">defensorApi.run</span> está pendente (modo limpo)</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1.65fr 1fr;gap:18px">
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <sc-for list="{{ skelCards }}" as="k" hint-placeholder-count="2">
+                  <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px">
+                    <div class="skel" style="height:11px;width:120px;margin-bottom:14px"></div>
+                    <div class="skel" style="height:10px;width:100%;margin-bottom:8px"></div>
+                    <div class="skel" style="height:10px;width:96%;margin-bottom:8px"></div>
+                    <div class="skel" style="height:10px;width:88%"></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:16px">
+                  <div class="skel" style="height:10px;width:90px;margin-bottom:14px"></div>
+                  <div class="skel" style="height:24px;width:60%;margin-bottom:10px"></div>
+                  <div class="skel" style="height:10px;width:80%"></div>
+                </div>
+                <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:16px">
+                  <div class="skel" style="height:10px;width:70px;margin-bottom:12px"></div>
+                  <div class="skel" style="height:10px;width:100%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. COMPONENTES NOVOS -->
+          <div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#2f6fed">02</span>
+              <h3 style="font-size:15px;font-weight:700;color:#13181f">Componentes novos · spec</h3>
+              <span style="font-size:12px;color:#9aa3af">4 a especificar em <span style="font-family:'IBM Plex Mono',monospace">@juridico/ui</span></span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+
+              <!-- EventStatusDot -->
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#13181f;margin-bottom:3px">EventStatusDot</p>
+                <p style="font-size:11.5px;color:#76808d;margin-bottom:14px">Bolinha de status de um evento do agente.</p>
+                <div style="display:flex;flex-direction:column;gap:11px">
+                  <div style="display:flex;align-items:center;gap:9px"><span style="width:9px;height:9px;border-radius:50%;background:#22c55e"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#13181f">ok</span><span style="font-size:11.5px;color:#8a93a0">· concluído</span><span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa3af">#22c55e</span></div>
+                  <div style="display:flex;align-items:center;gap:9px"><span style="width:9px;height:9px;border-radius:50%;background:#eab308" class="pulsedot"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#13181f">running</span><span style="font-size:11.5px;color:#8a93a0">· pulsante 1.4s</span><span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa3af">#eab308</span></div>
+                  <div style="display:flex;align-items:center;gap:9px"><span style="width:9px;height:9px;border-radius:50%;background:#64748b"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#13181f">pending</span><span style="font-size:11.5px;color:#8a93a0">· aguardando</span><span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9aa3af">#64748b</span></div>
+                </div>
+              </div>
+
+              <!-- ProvenanceTag -->
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#13181f;margin-bottom:3px">ProvenanceTag</p>
+                <p style="font-size:11.5px;color:#76808d;margin-bottom:14px">Origem do texto de cada seção da defesa.</p>
+                <div style="display:flex;flex-direction:column;gap:11px">
+                  <div style="display:flex;align-items:center;gap:10px"><span style="display:inline-flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:#e8effe;color:#2f6fed;border:1px solid #cddcf8">✦ via IA</span><span style="font-size:11.5px;color:#8a93a0">redigido pelo modelo</span></div>
+                  <div style="display:flex;align-items:center;gap:10px"><span style="display:inline-flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:#fbf4e2;color:#7a5800;border:1px solid #ecdcae">via IA · parcial</span><span style="font-size:11.5px;color:#8a93a0">IA sem reforço de fontes</span></div>
+                  <div style="display:flex;align-items:center;gap:10px"><span style="display:inline-flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:#f7f8fa;color:#48515e;border:1px solid #e7eaee">via template</span><span style="font-size:11.5px;color:#8a93a0">LLM off · revisar integral</span></div>
+                </div>
+              </div>
+
+              <!-- StepIndicator -->
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#13181f;margin-bottom:3px">StepIndicator</p>
+                <p style="font-size:11.5px;color:#76808d;margin-bottom:14px">4 passos · volta livre a concluídos, sem pular adiante.</p>
+                <div style="display:flex;align-items:center;gap:11px">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="width:28px;height:28px;border-radius:50%;background:#2f6fed;color:#fff;border:2px solid #2f6fed;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">✓</span><span style="font-size:10px;color:#76808d">concluído</span></div>
+                  <span style="flex:none;width:20px;height:2px;background:#2f6fed"></span>
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="width:28px;height:28px;border-radius:50%;background:#fff;color:#2f6fed;border:2px solid #2f6fed;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">2</span><span style="font-size:10px;color:#76808d">ativo</span></div>
+                  <span style="flex:none;width:20px;height:2px;background:#e7eaee"></span>
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:5px"><span style="width:28px;height:28px;border-radius:50%;background:#eef1f4;color:#9aa3af;border:1px solid #e3e7ec;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600">3</span><span style="font-size:10px;color:#9aa3af">pendente</span></div>
+                </div>
+              </div>
+
+              <!-- AgentLiveFeed -->
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#13181f;margin-bottom:3px">AgentLiveFeed</p>
+                <p style="font-size:11.5px;color:#76808d;margin-bottom:14px">2 tratamentos · ambos consomem o mesmo array de eventos.</p>
+                <div style="display:flex;flex-direction:column;gap:9px">
+                  <div style="display:flex;align-items:center;gap:9px;border:1px solid #e7eaee;border-radius:8px;padding:9px 11px"><span style="width:24px;height:24px;border-radius:6px;background:#0c1c33;color:#7fb0ff;font-family:'IBM Plex Mono',monospace;font-size:10px;display:flex;align-items:center;justify-content:center;flex:none">A</span><div><p style="font-size:12px;font-weight:600;color:#13181f">Terminal escuro</p><p style="font-size:11px;color:#8a93a0">#08111f · mono · "máquina trabalhando"</p></div></div>
+                  <div style="display:flex;align-items:center;gap:9px;border:1px solid #e7eaee;border-radius:8px;padding:9px 11px"><span style="width:24px;height:24px;border-radius:6px;background:#e8effe;color:#2f6fed;font-family:'IBM Plex Mono',monospace;font-size:10px;display:flex;align-items:center;justify-content:center;flex:none;border:1px solid #cddcf8">B</span><div><p style="font-size:12px;font-weight:600;color:#13181f">Timeline clara</p><p style="font-size:11px;color:#8a93a0">integrada ao app · linha com preenchimento</p></div></div>
+                </div>
+              </div>
+
+              <!-- ProtocolStatusCard -->
+              <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:17px 18px;grid-column:span 2">
+                <p style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#13181f;margin-bottom:3px">ProtocolStatusCard</p>
+                <p style="font-size:11.5px;color:#76808d;margin-bottom:14px">5 estados · cada um define badge, número, mensagem e modo (simulação/real).</p>
+                <div style="display:flex;flex-wrap:wrap;gap:9px">
+                  <sc-for list="{{ protoSpec }}" as="p" hint-placeholder-count="5">
+                    <div style="border:1px solid #e7eaee;border-radius:8px;padding:10px 12px;min-width:150px;flex:1">
+                      <span style="{{ p.badge }}">{{ p.label }}</span>
+                      <p style="font-size:11px;color:#8a93a0;margin-top:7px">{{ p.note }}</p>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 3. ERRO problem+json -->
+          <div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#2f6fed">03</span>
+              <h3 style="font-size:15px;font-weight:700;color:#13181f">ApiErrorBanner · problem+json</h3>
+              <span style="font-size:12px;color:#9aa3af">tema por <span style="font-family:'IBM Plex Mono',monospace">status</span> — acima do conteúdo</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <sc-for list="{{ errSpecs }}" as="e" hint-placeholder-count="3">
+                <div role="alert" style="display:flex;gap:12px;border-radius:8px;padding:14px 16px;{{ e.box }}">
+                  <span style="font-size:15px;flex:none">{{ e.icon }}</span>
+                  <div style="min-width:0">
+                    <p style="font-size:13px;font-weight:600;{{ e.tx }}">{{ e.title }}<span style="font-family:'IBM Plex Mono',monospace;font-size:11px;opacity:.6;margin-left:8px">{{ e.status }}</span></p>
+                    <p style="font-size:12.5px;margin-top:2px;opacity:.86;{{ e.tx }}">{{ e.detail }}</p>
+                    <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;margin-top:4px;opacity:.5;{{ e.tx }}">{{ e.meta }}</p>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- 4. MOTION -->
+          <div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#2f6fed">04</span>
+              <h3 style="font-size:15px;font-weight:700;color:#13181f">Motion</h3>
+              <span style="font-size:12px;color:#9aa3af">com fallback <span style="font-family:'IBM Plex Mono',monospace">prefers-reduced-motion</span></span>
+            </div>
+            <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;overflow:hidden">
+              <sc-for list="{{ motionRows }}" as="m" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:1.1fr 1fr 1.3fr;gap:14px;padding:12px 18px;border-bottom:1px solid #f0f2f5;align-items:center">
+                  <span style="font-size:12.5px;font-weight:600;color:#13181f">{{ m.what }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#2f6fed">{{ m.spec }}</span>
+                  <span style="font-size:11.5px;color:#8a93a0">reduzido → {{ m.reduced }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- 5. TOKENS -->
+          <div>
+            <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:12px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:#2f6fed">05</span>
+              <h3 style="font-size:15px;font-weight:700;color:#13181f">Tokens · @juridico/tokens</h3>
+            </div>
+            <div style="background:#fff;border:1px solid #e7eaee;border-radius:12px;padding:18px;display:flex;flex-wrap:wrap;gap:18px">
+              <sc-for list="{{ tokenSwatches }}" as="t" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="width:26px;height:26px;border-radius:7px;border:1px solid rgba(0,0,0,.08);background:{{ t.hex }}"></span>
+                  <div style="line-height:1.25"><p style="font-size:11.5px;font-weight:600;color:#13181f">{{ t.name }}</p><p style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9aa3af">{{ t.hex }}</p></div>
+                </div>
+              </sc-for>
+              <div style="width:100%;border-top:1px solid #f0f2f5;padding-top:13px;display:flex;gap:22px;flex-wrap:wrap">
+                <span style="font-size:11.5px;color:#48515e">Sans · <span style="font-family:'IBM Plex Sans'">IBM Plex Sans</span></span>
+                <span style="font-size:11.5px;color:#48515e">Mono · <span style="font-family:'IBM Plex Mono',monospace">IBM Plex Mono</span> (feed, números, protocolos)</span>
+                <span style="font-size:11.5px;color:#48515e">Raios · <span style="font-family:'IBM Plex Mono',monospace">6–12px</span></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        </sc-if>
+
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:860},&quot;feedDefault&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A'|'B'&quot;},&quot;autoplayFeed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showTrustHeader&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  state = {
+    role: 'analyst',
+    mock: true,
+    view: 'flow',
+    phase: 'entrada',
+    maxPhase: 1,
+    treat: 'A',
+    revealed: 0,
+    feedDone: false,
+    running: false,
+    scenario: 'normal',
+    proto: 'SIMULADO',
+    descricao: 'Contratou plano de internet fibra de 500 Mbps por R$ 99,90/mês. Nas 4 faturas seguintes apareceu cobrança adicional de "Streaming Premium" (R$ 39,90/mês), serviço nunca contratado, totalizando R$ 159,60. Abriu 3 chamados de cancelamento no SAC (protocolos 2026-A4471, 2026-A5588, 2026-A6610), sem solução; a cobrança persistiu e houve ameaça de negativação.',
+    canal: 'CONSUMIDOR_GOV',
+    tipo: 'CONSUMERISTA',
+    reclamante: 'Mariana Alves de Souza',
+    reclamada: 'Telecom Brasil Conecta S.A.',
+  };
+
+  EVENTS = [
+    { ts:'12:48:04', evento:'caso.classificado',       detalhe:'CONSUMERISTA · cobrança indevida', title:'Caso classificado',     tdet:'Consumerista · cobrança indevida' },
+    { ts:'12:48:05', evento:'reclamante.consultado',   detalhe:'2 casos anteriores',               title:'Reclamante consultado', tdet:'2 casos anteriores no histórico' },
+    { ts:'12:48:06', evento:'subsidios.solicitando',   detalhe:'crm · contrato + cobranças',       title:'Reunindo subsídios',    tdet:'CRM · contrato, cobranças, SAC' },
+    { ts:'12:48:11', evento:'subsidios.ok',            detalhe:'3 docs anexados',                  title:'Subsídios reunidos',    tdet:'3 documentos anexados' },
+    { ts:'12:48:12', evento:'jurisprudencia.match',    detalhe:'47 precedentes',                   title:'Jurisprudência casada', tdet:'47 precedentes · 3 citações fortes' },
+    { ts:'12:48:14', evento:'defesa.redigindo',        detalhe:'via IA · rascunho v3',             title:'Redigindo defesa',      tdet:'via IA · 4 seções' },
+    { ts:'12:48:18', evento:'defesa.pronta',           detalhe:'4 seções · 12.480 caracteres',     title:'Defesa pronta',         tdet:'12.480 caracteres · revisar' },
+    { ts:'12:48:19', evento:'protocolo.preparado',     detalhe:'CONSUMIDOR_GOV · resp.: agente',   title:'Protocolo preparado',   tdet:'Consumidor.gov · responsável: agente' },
+  ];
+
+  componentDidMount(){
+    if(typeof document!=='undefined'){ try{ document.documentElement.lang='pt-BR'; }catch(e){} }
+    if(this.props.feedDefault==='B') this.setState({treat:'B'});
+  }
+  componentWillUnmount(){ if(this._t) clearInterval(this._t); }
+
+  reduced(){ try{ return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){ return false; } }
+
+  go(p){ const order={entrada:1,exec:2,result:3,proto:4}; if(order[p] <= this.state.maxPhase) this.setState({phase:p}); }
+
+  startFeed(){
+    if(this._t) clearInterval(this._t);
+    const autoplay = this.props.autoplayFeed !== false;
+    if(this.reduced() || !autoplay){
+      this.setState({revealed:this.EVENTS.length, feedDone:true, running:false, maxPhase:Math.max(this.state.maxPhase,3)});
+      return;
+    }
+    this.setState({revealed:1, feedDone:false, running:true});
+    this._t = setInterval(()=>{
+      this.setState(s=>{
+        const n = s.revealed + 1;
+        if(n >= this.EVENTS.length){ clearInterval(this._t); return { revealed:this.EVENTS.length, running:false }; }
+        return { revealed:n };
+      });
+    }, 620);
+    // mark done a beat after last reveal
+    this._done = setTimeout(()=>{ this.setState(s=>({feedDone:true, running:false, maxPhase:Math.max(s.maxPhase,3)})); }, 620*this.EVENTS.length + 500);
+  }
+
+  acionar(){ this.setState({phase:'exec', maxPhase:Math.max(this.state.maxPhase,2)}); setTimeout(()=>this.startFeed(),40); }
+  rerun(){ if(this._done) clearTimeout(this._done); this.startFeed(); }
+
+  navStyle(active){
+    const base='width:100%;display:flex;align-items:center;gap:10px;padding:8px 9px;margin-bottom:2px;border:none;border-radius:8px;background:none;cursor:pointer;font-family:inherit;font-size:13px;transition:background .1s;';
+    return active ? base+'background:rgba(47,111,237,.16);color:#fff;box-shadow:inset 3px 0 0 #2f6fed;font-weight:500;' : base+'color:#9fb0c5;';
+  }
+  codeStyle(active){
+    return 'width:23px;height:23px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;font-weight:600;'+(active?'background:#2f6fed;color:#fff;':'background:#16294a;color:#7e95bd;');
+  }
+  seg(active){ return 'padding:6px 13px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;transition:all .12s;'+(active?'background:#fff;color:#13181f;box-shadow:0 1px 2px rgba(15,30,55,.12);':'background:transparent;color:#76808d;'); }
+  segSm(active){ return 'padding:5px 11px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;transition:all .12s;'+(active?'background:#fff;color:#13181f;box-shadow:0 1px 2px rgba(15,30,55,.12);':'background:transparent;color:#76808d;'); }
+  protoTab(active,c){ return 'padding:5px 10px;border:1px solid '+(active?c[2]:'#e3e7ec')+';border-radius:7px;cursor:pointer;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;letter-spacing:.02em;transition:all .12s;'+(active?'background:'+c[0]+';color:'+c[1]+';':'background:#fff;color:#9aa3af;'); }
+
+  secoesData(){
+    return [
+      { titulo:'DOS FATOS', count:19, chips:[{id:'STJ-REsp-1.985.xxx'},{id:'TJSP-AC-1023456-2025'}],
+        conteudo:'A Reclamante, Sra. Mariana Alves de Souza, contratou plano de internet fibra de 500 Mbps pelo valor de R$ 99,90/mês junto à Reclamada. Nas quatro faturas seguintes, porém, passou a constar cobrança adicional de "Streaming Premium" (R$ 39,90/mês), serviço jamais contratado, totalizando R$ 159,60 indevidamente cobrados. A Reclamante abriu três chamados de cancelamento via SAC (protocolos 2026-A4471, 2026-A5588 e 2026-A6610), sem qualquer solução, persistindo a cobrança e sobrevindo ameaça de negativação.' },
+      { titulo:'DO DIREITO DO CONSUMIDOR', count:9, chips:[{id:'STJ-AgInt-789-2024'}],
+        conteudo:'Aplica-se à espécie o Código de Defesa do Consumidor (Lei 8.078/90). O art. 42, parágrafo único, assegura a repetição do indébito em dobro nas hipóteses de cobrança indevida, salvo engano justificável — inexistente no caso. A cobrança por serviço não contratado configura, ainda, prática abusiva (art. 39, III), impondo-se a restituição em dobro dos valores.' },
+      { titulo:'DOS DANOS', count:4, chips:[{id:'TJSP-AC-1023456-2025'}],
+        conteudo:'A cobrança indevida e persistente, somada às reiteradas tentativas infrutíferas de cancelamento e à ameaça de inscrição em cadastro de inadimplentes, extrapola o mero aborrecimento e configura dano moral indenizável, nos termos da jurisprudência consolidada do STJ.' },
+      { titulo:'DOS PEDIDOS', count:0, chips:[],
+        conteudo:'Diante do exposto, requer-se: a) o cancelamento imediato da cobrança de "Streaming Premium"; b) a restituição em dobro dos valores indevidamente cobrados, totalizando R$ 319,20; c) a condenação ao pagamento de indenização por danos morais; d) a baixa de eventual negativação decorrente do débito ora questionado.' },
+    ];
+  }
+
+  renderVals(){
+    const s=this.state, noop=()=>{};
+    const role=s.role, isViewer=role==='viewer', canRun=role!=='viewer';
+    const mock=s.mock, noMock=!s.mock;
+
+    // sidebar
+    const mkNav=(arr)=>arr.map(it=>({...it, style:this.navStyle(!!it.active), codeStyle:this.codeStyle(!!it.active)}));
+    const navPlatform=mkNav([
+      {label:'Início',code:'IN'},{label:'Entidade',code:'EN'},
+      {label:'Alertas',code:'AL',count:'3'},{label:'Auditoria',code:'AU'},{label:'Conformidade',code:'CF'},
+    ]);
+    const navProducts=mkNav([
+      {label:'LegalScore',code:'LS'},{label:'ContabilIA',code:'CT'},{label:'ComplianceRadar',code:'CR'},
+      {label:'TaxPredict',code:'TP'},{label:'PetiBot',code:'PB'},{label:'ConciliaIA',code:'CC'},
+      {label:'Defensor',code:'DF',active:true,badge:'AGENTE'},
+      {label:'TribunaConnect',code:'TC',badge:'BETA'},
+    ]);
+
+    // RBAC tabs + mock toggle
+    const roleTabs=[['admin','Admin'],['analyst','Analista'],['viewer','Leitor']].map(([id,lb])=>({label:lb, go:()=>this.setState({role:id}), style:'padding:5px 11px;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;'+(role===id?'background:#0c1c33;color:#fff;':'background:transparent;color:#76808d;')}));
+
+    // steps
+    const order={entrada:1,exec:2,result:3,proto:4};
+    const cur=order[s.phase];
+    const stepDefs=[['1','Entrada','entrada'],['2','Execução','exec'],['3','Resultado','result'],['4','Protocolo','proto']];
+    const steps=stepDefs.map(([n,label,id],i)=>{
+      const idx=i+1; const done=idx<cur; const active=idx===cur; const reachable=idx<=s.maxPhase;
+      const circle = done ? 'background:#2f6fed;color:#fff;border:2px solid #2f6fed;'
+        : active ? 'background:#fff;color:#2f6fed;border:2px solid #2f6fed;'
+        : 'background:#eef1f4;color:#9aa3af;border:1px solid #e3e7ec;';
+      return {
+        n, label, mark: done?'✓':n,
+        go: reachable ? ()=>this.go(id) : noop,
+        btnStyle:'display:flex;align-items:center;gap:10px;background:none;border:none;padding:2px 4px;font-family:inherit;'+(reachable?'cursor:pointer;':'cursor:default;'),
+        circleStyle:'width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:\'IBM Plex Mono\',monospace;font-size:12px;font-weight:600;flex:none;'+circle,
+        labelStyle:'font-size:13px;font-weight:600;color:'+(active||done?'#13181f':'#9aa3af'),
+        connStyle: i<3 ? 'flex:1;height:2px;margin:0 6px;border-radius:2px;background:'+(idx<cur?'#2f6fed':'#e7eaee') : 'display:none',
+      };
+    });
+
+    // ---- FEED ----
+    const dotC={ok:'#22c55e',running:'#eab308',pending:'#64748b'};
+    const evAll=this.EVENTS.map((e,i)=>{
+      let st;
+      if(i < s.revealed-1) st='ok';
+      else if(i === s.revealed-1) st = s.feedDone?'ok':'running';
+      else st='pending';
+      return {...e, st};
+    });
+    const feedA = evAll.slice(0, Math.max(s.revealed,0)).map(e=>({
+      ts:e.ts, evento:e.evento, detalhe:e.detalhe, dotColor:dotC[e.st], pulseClass: e.st==='running'?'pulsedot':'',
+    }));
+    const feedB = evAll.map((e,i)=>{
+      const done=e.st==='ok', run=e.st==='running';
+      const nodeBg = done?'#2f6fed':run?'#fbf4e2':'#f1f3f6';
+      const nodeColor = done?'#fff':run?'#7a5800':'#9aa3af';
+      const nodeBorder = run?'2px solid #eab308':done?'2px solid #2f6fed':'1px solid #e3e7ec';
+      return {
+        title:e.title, bDetalhe:e.tdet,
+        bMark: done?'✓':(i+1),
+        bNodeStyle:'width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;flex:none;background:'+nodeBg+';color:'+nodeColor+';border:'+nodeBorder+';',
+        bNodePulse: run?'pulsedot':'',
+        bConnStyle: i<evAll.length-1 ? 'flex:1;width:2px;background:'+(done?'#bcd0f5':'#eef1f4')+';margin:2px 0;' : 'display:none',
+        bTitleColor: (done||run)?'#13181f':'#9aa3af',
+        bSeal: done?'ok':run?'running':'pendente',
+        bSealStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:9.5px;font-weight:600;padding:1px 7px;border-radius:5px;'+(done?'background:#e7f4ee;color:#0f5c3a;border:1px solid #bfe3d0;':run?'background:#fbf4e2;color:#7a5800;border:1px solid #ecdcae;':'background:#f1f3f6;color:#9aa3af;border:1px solid #e7eaee;'),
+      };
+    });
+    const runText = s.running?'rodando…':(s.feedDone?'concluído':'pronto');
+    const runColor = s.running?'#b07d00':(s.feedDone?'#0f5c3a':'#76808d');
+    const runPulseClass = s.running?'pulsedot':'';
+
+    // ---- SCENARIO (resultado) ----
+    const scen=s.scenario;
+    const scenTabs=[['normal','Normal'],['juris','Jurisprudência vazia'],['template','LLM template'],['erro','Erro de API']].map(([id,lb])=>({label:lb, go:()=>this.setState({scenario:id}), style:this.segSm(scen===id)}));
+    const jurisEmpty = scen==='juris';
+    const tmpl = scen==='template';
+    // provenance
+    let provLabel, provStyle;
+    if(tmpl){ provLabel='via template'; provStyle='display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:#f7f8fa;color:#48515e;border:1px solid #e7eaee;font-family:\'IBM Plex Mono\',monospace;'; }
+    else if(jurisEmpty){ provLabel='via IA · parcial'; provStyle='display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:#fbf4e2;color:#7a5800;border:1px solid #ecdcae;font-family:\'IBM Plex Mono\',monospace;'; }
+    else { provLabel='✦ via IA'; provStyle='display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;padding:2px 9px;border-radius:20px;background:#e8effe;color:#2f6fed;border:1px solid #cddcf8;font-family:\'IBM Plex Mono\',monospace;'; }
+
+    const secoes=this.secoesData().map(sec=>{
+      const count = jurisEmpty ? 0 : sec.count;
+      const chips = jurisEmpty ? [] : sec.chips.map(c=>({label:c.id, href:'https://www.cnj.jus.br/datajud/'+c.id}));
+      return {
+        titulo:sec.titulo, conteudo:sec.conteudo, chips,
+        showGuard: count < 3,
+        guardText: count===0 ? '0 precedentes — revisar com jurista' : count+' precedente'+(count!==1?'s':'')+' — revisar com jurista',
+      };
+    });
+
+    const showDegBanner = jurisEmpty || tmpl;
+    const degTitle = jurisEmpty ? 'Jurisprudência indisponível — DataJud não liberado' : 'LLM indisponível — defesa gerada por template';
+    const degDetail = jurisEmpty ? 'Nenhum precedente pôde ser casado (PD-06). A defesa segue válida, mas sem reforço jurisprudencial.' : 'O modelo de redação está fora do ar; o texto abaixo usa o template padrão e exige revisão integral por jurista.';
+    const showErrBanner = scen==='erro';
+
+    // RAG card
+    const ragOnline = !jurisEmpty;
+    const ragDot = ragOnline?'#1f8a5b':'#9aa3af';
+    const ragColor = ragOnline?'#0f5c3a':'#76808d';
+    const ragPulse = ragOnline?'pulsedot':'';
+    const ragStatus = ragOnline?'ChromaDB online':'DataJud não liberado';
+    const ragDetail = ragOnline?'47 precedentes indexados':'0 precedentes indexados · degradação graciosa';
+
+    const showTrust = this.props.showTrustHeader === true;
+    const freshSeals=[['DATAJUD','4d','#1f8a5b','#f1f9f5','#0f5c3a','#bfe3d0'],['CRM','2d','#1f8a5b','#f1f9f5','#0f5c3a','#bfe3d0'],['Consumidor.gov','6d','#caa215','#fbf6e9','#7a5800','#ecdcae']].map(([n,l,dot,bg,tx,bd])=>({
+      dot, label:n+' · '+l, style:'display:inline-flex;align-items:center;gap:6px;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:500;padding:2px 8px;border-radius:5px;background:'+bg+';color:'+tx+';border:1px solid '+bd+';'
+    }));
+
+    // ---- PROTOCOLO ----
+    const P=s.proto;
+    const cM={ // [bg,text,border]
+      SIMULADO:['#e8effe','#2f6fed','#cddcf8'],
+      AGUARDA_CREDENCIAIS:['#fbf4e2','#7a5800','#ecdcae'],
+      ENVIADO:['#e7f4ee','#0f5c3a','#bfe3d0'],
+      FALHA:['#fae3e1','#8f2a22','#f0c2bd'],
+      CANAL_NAO_SUPORTADO:['#f7f8fa','#48515e','#e7eaee'],
+    };
+    const protoLabels={SIMULADO:'SIMULADO',AGUARDA_CREDENCIAIS:'AGUARDA CRED.',ENVIADO:'ENVIADO',FALHA:'FALHA',CANAL_NAO_SUPORTADO:'NÃO SUPORTADO'};
+    const protoTabs=Object.keys(cM).map(k=>({label:protoLabels[k], go:()=>this.setState({proto:k}), style:this.protoTab(P===k,cM[k])}));
+    const pc=cM[P];
+    const protoBadgeStyle='display:inline-flex;align-items:center;font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;font-weight:600;letter-spacing:.03em;padding:3px 10px;border-radius:6px;background:'+pc[0]+';color:'+pc[1]+';border:1px solid '+pc[2]+';';
+    const pdata={
+      SIMULADO:{num:'SIM-CONSUMIDOR_GOV-1A2B3C4D5E',hasNum:true,link:false,msg:'Execução em modo simulação — nenhuma submissão real foi feita ao portal. Ative o modo real e configure as credenciais para protocolar de fato.',mode:'simulação',modeBox:['#e8effe','#2f6fed','#cddcf8'],icon:'🧪',mTitle:'Modo simulação',mDetail:'Seguro · nenhum dado sai da plataforma'},
+      AGUARDA_CREDENCIAIS:{num:'—',hasNum:false,link:false,msg:'Modo real ativo, porém as credenciais do portal Consumidor.gov não estão configuradas para este tenant. Solicite ao Admin o cadastro das credenciais.',mode:'real',modeBox:['#fbf6e9','#7a5800','#ecdcae'],icon:'⚠',mTitle:'Modo real · aguardando credenciais',mDetail:'A submissão não pode prosseguir sem credenciais'},
+      ENVIADO:{num:'CG-2026-0098432',hasNum:true,link:true,msg:'Defesa protocolada com sucesso no portal Consumidor.gov. O número acima foi emitido pelo portal e consta na trilha de auditoria.',mode:'real',modeBox:['#f1f9f5','#0f5c3a','#bfe3d0'],icon:'✓',mTitle:'Modo real · enviado',mDetail:'Submissão registrada no portal externo'},
+      FALHA:{num:'—',hasNum:false,link:false,msg:'O portal Consumidor.gov retornou erro 503 (indisponível) durante a submissão. Nenhum protocolo foi gerado; a defesa será reprocessada automaticamente na próxima janela.',mode:'real',modeBox:['#fbeae8','#8f2a22','#f0c2bd'],icon:'✕',mTitle:'Modo real · falha no envio',mDetail:'Portal externo indisponível no momento'},
+      CANAL_NAO_SUPORTADO:{num:'—',hasNum:false,link:false,msg:'O canal selecionado não oferece protocolo automático pela plataforma. Encaminhe a defesa para peticionamento manual pelo responsável.',mode:'—',modeBox:['#f7f8fa','#48515e','#e7eaee'],icon:'∅',mTitle:'Canal sem protocolo automático',mDetail:'Requer encaminhamento manual'},
+    }[P];
+    const modeChipStyle='font-family:\'IBM Plex Mono\',monospace;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:5px;'+(pdata.mode==='real'?'background:#fbf4e2;color:#7a5800;border:1px solid #ecdcae;':pdata.mode==='simulação'?'background:#e8effe;color:#2f6fed;border:1px solid #cddcf8;':'background:#f7f8fa;color:#9aa3af;border:1px solid #e7eaee;');
+
+    return {
+      noop,
+      navPlatform, navProducts, roleTabs, roleLabel:role==='admin'?'Admin':role==='analyst'?'Analista':'Leitor',
+      isViewer, canRun, noMock,
+      // mock toggle
+      toggleMock:()=>this.setState(st=>({mock:!st.mock})),
+      mockBtnStyle:'display:flex;align-items:center;gap:8px;height:34px;padding:0 11px;border-radius:8px;border:1px solid '+(mock?'#cddcf8':'#e3e7ec')+';background:'+(mock?'#eef4fe':'#fff')+';cursor:pointer;font-family:inherit;',
+      mockTrackStyle:'width:30px;height:17px;border-radius:10px;position:relative;transition:background .15s;background:'+(mock?'#2f6fed':'#cdd5df')+';',
+      mockKnobStyle:'position:absolute;top:2px;left:'+(mock?'15px':'2px')+';width:13px;height:13px;border-radius:50%;background:#fff;transition:left .15s;',
+      mockText:mock?'Dados de demonstração':'Plataforma limpa', mockSub:mock?'ON':'OFF',
+      // view toggle
+      isFlow:s.view==='flow', isHandoff:s.view==='handoff',
+      viewTabs:[['flow','Protótipo'],['handoff','Handoff dev']].map(([id,lb])=>({label:lb, go:()=>this.setState({view:id}), style:'padding:5px 13px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:600;'+(s.view===id?'background:#fff;color:#13181f;box-shadow:0 1px 2px rgba(15,30,55,.12);':'background:transparent;color:#76808d;')})),
+      // handoff data
+      skelCards:[1,2,3],
+      protoSpec:[
+        {label:'SIMULADO', note:'padrão · nenhuma submissão real', badge:this.specBadge('#e8effe','#2f6fed','#cddcf8')},
+        {label:'AGUARDA CRED.', note:'modo real sem credenciais', badge:this.specBadge('#fbf4e2','#7a5800','#ecdcae')},
+        {label:'ENVIADO', note:'nº do portal + link', badge:this.specBadge('#e7f4ee','#0f5c3a','#bfe3d0')},
+        {label:'FALHA', note:'mensagem de erro do portal', badge:this.specBadge('#fae3e1','#8f2a22','#f0c2bd')},
+        {label:'NÃO SUPORTADO', note:'canal sem protocolo automático', badge:this.specBadge('#f7f8fa','#48515e','#e7eaee')},
+      ],
+      errSpecs:[
+        {status:'429', icon:'⏱', title:'Limite de requisições atingido', detail:'O tenant excedeu 100 req/min. As próximas consultas são enfileiradas.', meta:'retry_after: 30 · contract_version: 2026-05', box:'background:#fbf6e9;border:1px solid #ecdcae;', tx:'color:#7a5800;'},
+        {status:'501', icon:'🔒', title:'Não implementado', detail:'Funcionalidade aguardando liberação regulatória (PD-06) — DataJud ainda não disponível neste ambiente.', meta:'instance: /api/v1/defensor/run', box:'background:#f7f8fa;border:1px solid #e7eaee;', tx:'color:#48515e;'},
+        {status:'503', icon:'⚠', title:'Serviço indisponível', detail:'Circuit breaker ativo — o serviço do agente está temporariamente fora do ar. A defesa exibida é o último rascunho válido.', meta:'instance: /api/v1/defensor/run · contract_version: 2026-05', box:'background:#fae3e1;border:1px solid #f0c2bd;', tx:'color:#8f2a22;'},
+      ],
+      motionRows:[
+        {what:'Entrada de linha (feed A)', spec:'stagger 620ms · slide .32s', reduced:'revela tudo de uma vez'},
+        {what:'Preenchimento da timeline (B)', spec:'nó a nó · 620ms', reduced:'todos os nós concluídos'},
+        {what:'Dot "running"', spec:'pulse 1.4s ease-in-out ∞', reduced:'estático (amarelo fixo)'},
+        {what:'DegradationBanner · selo defasado', spec:'pulse 1.6s ∞', reduced:'estático'},
+      ],
+      tokenSwatches:[
+        {name:'accent', hex:'#2f6fed'},{name:'sidebar', hex:'#0c1c33'},{name:'feed bg', hex:'#08111f'},
+        {name:'ok', hex:'#22c55e'},{name:'running', hex:'#eab308'},{name:'pending', hex:'#64748b'},
+        {name:'riskLow', hex:'#1f8a5b'},{name:'riskHigh', hex:'#cf6a1f'},{name:'riskCritico', hex:'#c4382f'},
+      ],
+      // steps + phase
+      steps,
+      isEntrada:s.view==='flow'&&s.phase==='entrada', isExec:s.view==='flow'&&s.phase==='exec', isResult:s.view==='flow'&&s.phase==='result', isProto:s.view==='flow'&&s.phase==='proto',
+      // entrada
+      descricao:s.descricao, charCount:s.descricao.length, canal:s.canal, tipo:s.tipo, reclamante:s.reclamante, reclamada:s.reclamada,
+      setDescricao:e=>this.setState({descricao:e.target.value}),
+      setCanal:e=>this.setState({canal:e.target.value}), setTipo:e=>this.setState({tipo:e.target.value}),
+      setReclamante:e=>this.setState({reclamante:e.target.value}), setReclamada:e=>this.setState({reclamada:e.target.value}),
+      acionar:()=>this.acionar(),
+      // exec
+      treat:s.treat, treatA:s.treat==='A', treatB:s.treat==='B',
+      setTreatA:()=>this.setState({treat:'A'}), setTreatB:()=>this.setState({treat:'B'}),
+      treatAStyle:this.seg(s.treat==='A'), treatBStyle:this.seg(s.treat==='B'),
+      treatHint:s.treat==='A'?'feed escuro · "máquina trabalhando"':'timeline clara · integrada ao app',
+      feedA, feedB, feedDone:s.feedDone, running:s.running, runText, runColor, runPulseClass,
+      rerun:()=>this.rerun(), verResultado:()=>this.go('result'),
+      // resultado
+      scenTabs, secoes, provLabel, provStyle,
+      showDegBanner, degTitle, degDetail, showErrBanner,
+      ragDot, ragColor, ragPulse, ragStatus, ragDetail,
+      showTrust, freshSeals,
+      protocolar:()=>{ this.setState({maxPhase:Math.max(this.state.maxPhase,4)}); this.go2('proto'); },
+      // protocolo
+      protoTabs, protoStatus:protoLabels[P], protoBadgeStyle,
+      protoHasNumber:pdata.hasNum, protoNumber:pdata.num, protoMessage:pdata.msg, protoHasLink:pdata.link, protoTime:'2026-06-25T12:48:21',
+      modeChip:pdata.mode, modeChipStyle,
+      modeIcon:pdata.icon, modeTitle:pdata.mTitle, modeDetail:pdata.mDetail,
+      modeBoxStyle:'background:'+pdata.modeBox[0]+';border:1px solid '+pdata.modeBox[2]+';',
+      modeTextStyle:'color:'+pdata.modeBox[1]+';',
+      backResult:()=>this.go('result'),
+    };
+  }
+
+  go2(p){ this.setState({phase:p}); }
+
+  specBadge(bg,tx,bd){ return 'display:inline-flex;align-items:center;font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:600;letter-spacing:.03em;padding:3px 9px;border-radius:6px;background:'+bg+';color:'+tx+';border:1px solid '+bd+';'; }
+}
+</script>
+</body>
+</html>
