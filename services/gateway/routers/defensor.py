@@ -12,8 +12,10 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from services.defensor.orchestrator import run_agente
+from services.defensor.protocolar import protocolar
 from services.gateway.observability import span as obs_span
 from services.shared.contracts.defensor import DEFENSOR_CONTRACT_VERSION, DefensorRequest
+from services.shared.contracts.protocolo import ProtocoloRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -112,3 +114,39 @@ async def reputacao(termo: str) -> JSONResponse:
         "source": "Consumidor.gov",
         "contract_version": DEFENSOR_CONTRACT_VERSION,
     })
+
+
+@router.post(
+    "/protocolar",
+    summary="Protocola a defesa no órgão (simulação por padrão)",
+    responses={
+        200: {
+            "description": "Resultado do protocolo. Em modo simulação (padrão), status=SIMULADO.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "canal": "PROCON",
+                        "modo": "simulacao",
+                        "status": "SIMULADO",
+                        "numero_protocolo": "SIM-PROCON-1A2B3C4D5E",
+                        "url": None,
+                        "mensagem": "Protocolo SIMULADO — nenhuma submissão real foi feita.",
+                        "contract_version": "protocolo/v1",
+                    }
+                }
+            },
+        },
+        422: {"description": "Dados de entrada inválidos"},
+    },
+)
+async def protocolar_endpoint(req: ProtocoloRequest) -> JSONResponse:
+    """
+    Protocola (ou simula) a defesa no canal informado.
+
+    Por padrão roda em SIMULAÇÃO — nenhuma submissão real é feita. A submissão
+    real exige PROTOCOLO_MODO=real, credenciais do portal e host liberado na
+    allowlist de rede (ver docs/PROTOCOLO-AUTOMACAO.md).
+    """
+    with obs_span("defensor.protocolar", {"canal": req.canal.value}):
+        resultado = protocolar(req)
+        return JSONResponse(content=resultado.model_dump(), status_code=200)

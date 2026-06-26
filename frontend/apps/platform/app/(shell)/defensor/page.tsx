@@ -119,6 +119,21 @@ export default function DefensorPage() {
   const proximoResponsavel = demoMode || !apiData ? 'agente' : apiData.proximo_responsavel
   const precedentesIndexados = demoMode || !apiData ? 47 : apiData.precedentes_encontrados
 
+  // Protocolo (simulação por padrão; submissão real exige PROTOCOLO_MODO=real + credenciais).
+  const protocolarMutation = useMutation({
+    mutationFn: () =>
+      defensorApi.protocolar({
+        canal,
+        reclamante: reclamante || 'Reclamante',
+        reclamada: reclamada || 'Empresa',
+        resumo: descricao.trim().length >= 20
+          ? descricao
+          : 'Reclamação de consumidor conforme caso analisado pelo agente Defensor.',
+        defesa: secoes.map((s) => `${s.titulo}\n${s.conteudo}`).join('\n\n'),
+      }),
+  })
+  const protocolo = protocolarMutation.data
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center gap-3">
@@ -207,7 +222,32 @@ export default function DefensorPage() {
                 </div>
               </Card>
             ))}
-            <Button variant="secondary" className="self-start">Exportar .docx</Button>
+            <div className="flex items-center gap-3 self-start">
+              <Button variant="secondary">Exportar .docx</Button>
+              <RbacGate role={role} requires="analyst">
+                <Button onClick={() => protocolarMutation.mutate()} loading={protocolarMutation.isPending}>
+                  Protocolar defesa
+                </Button>
+              </RbacGate>
+            </div>
+
+            <ApiErrorBanner error={protocolarMutation.error} demoMode={demoMode} />
+
+            {protocolo && (
+              <Card padding="md">
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <SectionLabel>Protocolo · {protocolo.canal}</SectionLabel>
+                  <Badge variant={protocolo.status === 'ENVIADO' ? 'LOW' : protocolo.status === 'FALHA' ? 'ALTO' : 'MODERADO'}>
+                    {protocolo.status}
+                  </Badge>
+                </div>
+                {protocolo.numero_protocolo && (
+                  <p className="font-mono text-[14px] font-bold text-textPrimary">{protocolo.numero_protocolo}</p>
+                )}
+                <p className="text-[11px] text-textMuted mt-1">{protocolo.mensagem}</p>
+                <p className="text-[10px] text-textFaint mt-1">modo: {protocolo.modo}</p>
+              </Card>
+            )}
           </div>
 
           {/* Rail: feed do agente + enriquecimento */}
