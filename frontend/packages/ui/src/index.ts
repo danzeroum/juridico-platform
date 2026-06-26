@@ -41,5 +41,20 @@ export { RbacGate, ViewerBanner } from './patterns/RbacGate'
 
 export { EmptyState } from './patterns/EmptyState'
 
+// Defensor (lente DF) — agente de IA
+export { EventStatusDot, EVENT_STATUS_COLORS, EVENT_STATUS_LABELS } from './patterns/EventStatusDot'
+export type { EventStatus } from './patterns/EventStatusDot'
+export { AgentLiveFeed } from './patterns/AgentLiveFeed'
+export type { AgentEvent, FeedTreatment } from './patterns/AgentLiveFeed'
+export { ProtocolStatusCard } from './patterns/ProtocolStatusCard'
+export type { ProtocolStatus, ProtocolMode, ProtocolStatusCardProps } from './patterns/ProtocolStatusCard'
+export { ProvenanceTag } from './patterns/ProvenanceTag'
+export type { Provenance } from './patterns/ProvenanceTag'
+export { StepIndicator, DEFENSOR_STEPS } from './patterns/StepIndicator'
+export type { Step } from './patterns/StepIndicator'
+export { Segmented } from './primitives/Segmented'
+export type { SegmentedOption } from './primitives/Segmented'
+export { useStaggeredReveal } from './hooks/useStaggeredReveal'
+
 // Utils
 export { cn } from './lib/cn'
