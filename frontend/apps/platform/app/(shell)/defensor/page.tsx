@@ -6,7 +6,7 @@
  * Dados reais via defensorApi.run / .reputacao / .protocolar; em demoMode usa fixtures.
  * Switchers de cenário/estado do protocolo aparecem só em demoMode (recursos de QA).
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Card, SectionLabel, Badge, Button, Input, Textarea, Skeleton,
@@ -57,6 +57,8 @@ export default function DefensorPage() {
   const [treatment, setTreatment] = useState<'terminal' | 'timeline'>('terminal')
   const [scenario, setScenario] = useState<Scenario>('normal')
   const [protoDemo, setProtoDemo] = useState<ProtocolStatus>('SIMULADO')
+  const [feedRan, setFeedRan] = useState(false)   // o feed rodou de fato (≠ done inicial)
+  const [replayKey, setReplayKey] = useState(0)   // força remount p/ re-animar o fadeup
 
   const [descricao, setDescricao] = useState('')
   const [canal, setCanal] = useState('CONSUMIDOR_GOV')
@@ -93,8 +95,6 @@ export default function DefensorPage() {
     ? (scenario === 'llm_template' ? 'template' : scenario === 'juris_vazia' ? 'parcial' : 'ia')
     : (PROVENANCE_BY_VIA[apiData?.defesa_via ?? 'template'] ?? 'template')
 
-  const jurisEmpty = demoMode ? scenario === 'juris_vazia' : (apiData?.precedentes_encontrados ?? 0) === 0
-
   const secoes: SecaoView[] = demoMode || !apiData
     ? MOCK_SECOES
     : apiData.secoes.map((s) => ({
@@ -103,6 +103,12 @@ export default function DefensorPage() {
         precedentes_count: s.precedentes.length,
         precedentes: s.precedentes.map((id) => ({ doc_id: id, href: `https://www.cnj.jus.br/datajud/${id}` })),
       }))
+
+  // Reconcilia o agregado com as seções: só "vazio" se o contador E as seções não têm precedentes
+  // (evita esconder citações reais por causa de um precedentes_encontrados=0 dessincronizado).
+  const jurisEmpty = demoMode
+    ? scenario === 'juris_vazia'
+    : (apiData?.precedentes_encontrados ?? 0) === 0 && secoes.every((s) => s.precedentes.length === 0)
 
   const protoMutation = useMutation({
     mutationFn: () =>
@@ -118,24 +124,32 @@ export default function DefensorPage() {
   // ---- Stagger do feed ----
   const { revealed, done, run } = useStaggeredReveal({ total: events.length, auto: false })
 
-  // dispara o stagger quando os dados reais chegam (em demo, é disparado no acionar())
-  useEffect(() => {
-    if (!demoMode && runMutation.isSuccess) run()
-  }, [demoMode, runMutation.isSuccess, run])
+  // (re)inicia o feed: marca que rodou de fato, força remount (replay do fadeup) e dispara o stagger.
+  const startFeed = useCallback(() => {
+    setFeedRan(true)
+    setReplayKey((k) => k + 1)
+    run()
+  }, [run])
 
-  // feed concluído (durante a execução) → libera o passo Resultado.
-  // Gate em phase==='exec': com auto:false o hook começa done=true, então sem o
-  // gate o passo 3 seria liberado já na montagem (antes de acionar).
+  // dispara o stagger quando os dados reais chegam (em demo, é disparado no acionar()).
   useEffect(() => {
-    if (phase === 'exec' && done && maxPhase < 2) setMaxPhase(2)
-  }, [phase, done, maxPhase])
+    if (!demoMode && runMutation.isSuccess) startFeed()
+  }, [demoMode, runMutation.isSuccess, startFeed])
+
+  // feed concluído (após rodar de fato) → libera o passo Resultado.
+  // `feedRan` evita o falso-positivo: com auto:false o hook começa done=true e, em modo
+  // real, acionar() não chama run() (espera os dados) — sem feedRan o passo 3 abriria já
+  // ao clicar Acionar, com o agente ainda pendente.
+  useEffect(() => {
+    if (phase === 'exec' && feedRan && done && maxPhase < 2) setMaxPhase(2)
+  }, [phase, feedRan, done, maxPhase])
 
   function goto(i: number) {
     if (i <= maxPhase) setPhase(DEFENSOR_STEPS[i].id as Phase)
   }
   function acionar() {
     setPhase('exec'); setMaxPhase((m) => Math.max(m, 1))
-    if (demoMode) run()
+    if (demoMode) startFeed()
     else runMutation.mutate()
   }
   function protocolar() {
@@ -194,7 +208,7 @@ export default function DefensorPage() {
             />
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] text-textMuted">{done ? 'concluído' : 'rodando…'}</span>
-              <Button variant="secondary" size="sm" onClick={run}>↻ re-rodar</Button>
+              <Button variant="secondary" size="sm" onClick={startFeed}>↻ re-rodar</Button>
             </div>
           </div>
 
@@ -202,7 +216,7 @@ export default function DefensorPage() {
 
           {!demoMode && runMutation.isPending
             ? <Skeleton height={300} className="rounded-card max-w-[760px]" />
-            : <div className="max-w-[760px]"><AgentLiveFeed events={events} revealed={revealed} treatment={treatment} /></div>}
+            : <div className="max-w-[760px]"><AgentLiveFeed key={replayKey} events={events} revealed={revealed} treatment={treatment} /></div>}
 
           {done && (
             <Button className="self-start" onClick={() => { setMaxPhase((m) => Math.max(m, 2)); setPhase('result') }}>

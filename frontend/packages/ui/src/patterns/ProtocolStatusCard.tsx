@@ -58,8 +58,9 @@ export function ProtocolStatusCard({
   enviadoEm,
   className,
 }: ProtocolStatusCardProps) {
-  const meta = STATUS_META[status]
-  const mode = MODE_META[modo]
+  // Fallback defensivo: status/modo fora da união (backend evoluiu) não quebra a tela.
+  const meta = STATUS_META[status] ?? STATUS_META.FALHA
+  const mode = MODE_META[modo] ?? MODE_META.na
   return (
     <div className={cn('bg-surface border border-border rounded-card p-5', className)}>
       <div className="flex items-center justify-between gap-3 mb-3.5">
