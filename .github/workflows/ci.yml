@@ -231,3 +231,31 @@ jobs:
           DATABASE_URL: postgresql://app_user:testpassword@localhost:5432/juridico_platform
           HMAC_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
           ENV: test
+
+  # ---------------------------------------------------------------------------
+  # Testes de componentes do frontend (@juridico/ui — Vitest)
+  # ---------------------------------------------------------------------------
+  frontend-tests:
+    name: Frontend Component Tests (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        working-directory: frontend
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run @juridico/ui tests
+        working-directory: frontend
+        run: pnpm --filter @juridico/ui test
