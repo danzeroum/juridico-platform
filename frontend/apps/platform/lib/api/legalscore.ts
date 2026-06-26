@@ -22,14 +22,18 @@ export interface LegalScoreResult {
   is_partial?: boolean
 }
 
+// Espelha a resposta de GET /api/v1/legalscore/model-metrics (services/scoring/validation).
 export interface ModelMetrics {
-  status: 'heuristica' | 'calibrado'
-  auc: number
-  auc_target: number
-  brier: number
-  brier_target: number
-  ks: number
-  sample_size: number
+  model_type: 'heuristica' | 'calibrado'
+  validation_status: 'pending' | 'validated'
+  auc: number | null
+  brier_score: number | null
+  calibration_r2: number | null
+  n_validation_samples: number
+  validation_note: string
+  last_calibrated: string | null
+  target_auc: number
+  target_brier: number
 }
 
 export interface BatchJob {
@@ -46,22 +50,21 @@ export const legalscoreApi = {
     api.post<LegalScoreResult>('/api/v1/legalscore/score', { cnpj }),
 
   modelMetrics: () =>
-    api.get<ModelMetrics>('/api/v1/legalscore/model/metrics'),
+    api.get<ModelMetrics>('/api/v1/legalscore/model-metrics'),
 
   audit: (requestId: string) =>
     api.get<{ request_id: string; leaf_hash: string; merkle_root: string; proof: Array<{ position: 'L' | 'R'; hash: string }> }>(
       `/api/v1/legalscore/audit/${requestId}`,
     ),
 
-  batchUpload: (file: File) => {
-    const form = new FormData()
-    form.append('file', file)
-    return api.postForm<{ job_id: string }>('/api/v1/legalscore/batch', form)
-  },
+  // POST /batch recebe JSON { cnpjs: [...] } (não upload de arquivo) e devolve 202.
+  batchScore: (cnpjs: string[]) =>
+    api.post<{ job_id: string; total: number; status: string }>(
+      '/api/v1/legalscore/batch',
+      { cnpjs },
+    ),
 
   batchStatus: (jobId: string) =>
     api.get<BatchJob>(`/api/v1/legalscore/batch/${jobId}`),
-
-  listJobs: () =>
-    api.get<BatchJob[]>('/api/v1/legalscore/batch'),
+  // Obs.: o gateway não expõe GET /batch (listagem de jobs). Acompanhe via batchStatus(jobId).
 }
