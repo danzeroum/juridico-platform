@@ -78,3 +78,12 @@ def tenant_transaction(tenant_id: str) -> Iterator[Connection]:
 
 # Nome alternativo referenciado pelo docstring do middleware do gateway.
 get_db_connection = tenant_transaction
+
+
+def get_engine() -> Engine:
+    """
+    Engine compartilhado (sem contexto de tenant). Para uso em queries que NÃO
+    estão sob RLS — ex.: autenticação contra tenant.tenants/tenant.users, que o
+    app_user pode ler diretamente. Queries sob RLS DEVEM usar tenant_transaction.
+    """
+    return _get_engine()

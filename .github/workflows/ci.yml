@@ -208,6 +208,8 @@ jobs:
           PGPASSWORD=testpassword psql -h localhost -U juridico -d juridico_platform \
             -f scripts/bootstrap-db.sql
           PGPASSWORD=testpassword psql -h localhost -U juridico -d juridico_platform \
+            -f scripts/migrations/002_users_password_and_auth.sql
+          PGPASSWORD=testpassword psql -h localhost -U juridico -d juridico_platform \
             -c "ALTER ROLE app_user PASSWORD 'testpassword';"
 
       - name: Setup Python 3.12
