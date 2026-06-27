@@ -50,3 +50,6 @@ bronze/
 silver/
 gold/
 .coverage
+
+# Next.js generated type declarations (regenerated on build)
+**/next-env.d.ts

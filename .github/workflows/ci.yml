@@ -259,3 +259,42 @@ jobs:
       - name: Run @juridico/ui tests
         working-directory: frontend
         run: pnpm --filter @juridico/ui test
+
+  # ---------------------------------------------------------------------------
+  # Type-check + build do app Next.js (apps/platform)
+  #
+  # Os testes de componentes (Vitest) não exercitam o build de produção. Este
+  # job pega regressões de config (next.config), fronteiras 'use client' e
+  # erros de tipo no app — classe de falha que passou despercebida antes.
+  # ---------------------------------------------------------------------------
+  frontend-build:
+    name: Frontend Type-check & Build (Next.js)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        working-directory: frontend
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Type-check (tokens, ui, platform)
+        working-directory: frontend
+        run: |
+          pnpm --filter @juridico/tokens type-check
+          pnpm --filter @juridico/ui type-check
+          pnpm --filter platform exec tsc --noEmit
+
+      - name: Build app
+        working-directory: frontend
+        run: pnpm --filter platform build

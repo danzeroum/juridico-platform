@@ -45,7 +45,8 @@ export function ScoreGauge({ score, ciLow, ciHigh, size = 260, className }: Scor
   const trackWidth = outerR - innerR
 
   const riskLevel = scoreToriskLevel(score)
-  const riskColor = RISK_COLORS[riskLevel]
+  const riskColor: { solid: string; bg: string; text: string; border: string } =
+    RISK_COLORS[riskLevel as keyof typeof RISK_COLORS]
 
   const scoreAngle = scoreToAngle(score)
   const ciLowAngle = scoreToAngle(ciLow)
