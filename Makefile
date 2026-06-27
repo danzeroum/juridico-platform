@@ -30,8 +30,12 @@ health: ## Health check de todos os serviços
 	@curl -sf http://localhost:3001/api/health && echo "✅ Grafana: OK" || echo "❌ Grafana: FAIL"
 	@curl -sf http://localhost:9000/minio/health/live && echo "✅ MinIO: OK" || echo "❌ MinIO: FAIL"
 
-migrate: ## Roda migrações Alembic
-	docker compose $(COMPOSE_FILES) exec gateway alembic upgrade head
+migrate: ## Aplica migrações de schema (runner idempotente; precisa de creds admin)
+	@echo "Aplicando migrações… (defina MIGRATIONS_DATABASE_URL para a conexão de owner)"
+	python scripts/migrate.py
+
+migrate-status: ## Lista migrações aplicadas/pendentes
+	python scripts/migrate.py --status
 
 test: ## Roda todos os testes unitários e de integração
 	docker compose $(COMPOSE_FILES) run --rm gateway pytest tests/ -v --tb=short
