@@ -18,6 +18,7 @@ ORDEM DOS MIDDLEWARES (do mais externo para o mais interno):
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any
 
@@ -38,9 +39,17 @@ _PUBLIC_PATHS = {
     "/redoc",
 }
 
-# Rate limit por tenant em memória (substituir por Redis em produção)
-_request_counts: dict[str, int] = {}
-_DEFAULT_RATE_LIMIT = 100  # req/min por tenant
+# Rate limit por tenant via Redis (INCR + TTL) — funciona entre réplicas.
+_RATE_LIMIT_PER_MIN = int(os.getenv("RATE_LIMIT_PER_MIN", "100"))
+# Se o Redis cair: por padrão FAIL-OPEN (preserva disponibilidade) com aviso;
+# defina RATE_LIMIT_FAIL_CLOSED=true para rejeitar (503) quando o limitador
+# estiver indisponível.
+_RATE_LIMIT_FAIL_CLOSED = os.getenv("RATE_LIMIT_FAIL_CLOSED", "false").strip().lower() == "true"
+
+# Circuit breaker: ao falhar (Redis fora), evita pagar o timeout de conexão a
+# cada request — abre o circuito por _REDIS_COOLDOWN segundos.
+_REDIS_COOLDOWN = 30.0
+_redis_down_until = 0.0
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -102,27 +111,60 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Rate limiting por tenant (não por IP) — 100 req/min por tenant por padrão.
-    Em produção: substituir o dict em memória por Redis INCR com TTL de 60s.
+    Rate limiting por tenant (não por IP) — `RATE_LIMIT_PER_MIN` (100) por padrão.
+
+    Contador em Redis: `INCR ratelimit:{tenant}:{minuto}` com `EXPIRE 60s`. Como
+    o estado é compartilhado, o limite vale para o cluster inteiro (não por
+    processo). Se o Redis estiver indisponível, ver `_RATE_LIMIT_FAIL_CLOSED`.
     """
 
     async def dispatch(self, request: Request, call_next: Any) -> Response:
-        tenant_id = getattr(request.state, "tenant_id", None) or request.client.host
-        current_minute = int(time.time() / 60)
-        key = f"{tenant_id}:{current_minute}"
+        global _redis_down_until
 
-        _request_counts[key] = _request_counts.get(key, 0) + 1
-        if _request_counts[key] > _DEFAULT_RATE_LIMIT:
+        client_host = request.client.host if request.client else "anon"
+        tenant_id = getattr(request.state, "tenant_id", None) or client_host
+        now = time.time()
+        current_minute = int(now // 60)
+        key = f"ratelimit:{tenant_id}:{current_minute}"
+
+        # Circuito aberto: Redis fora há pouco — não tenta de novo até o cooldown.
+        if now < _redis_down_until:
+            return await self._on_limiter_unavailable(request, call_next)
+
+        try:
+            from services.shared.redis_client import get_redis
+
+            redis = get_redis()
+            count = redis.incr(key)
+            if count == 1:
+                redis.expire(key, 60)
+        except Exception as exc:
+            _redis_down_until = now + _REDIS_COOLDOWN
+            logger.warning("Rate limiter (Redis) indisponível por %ss: %s", int(_REDIS_COOLDOWN), exc)
+            return await self._on_limiter_unavailable(request, call_next)
+
+        if count > _RATE_LIMIT_PER_MIN:
             return _problem_json(
                 status=429,
                 title="Rate limit excedido",
-                detail=f"Máximo de {_DEFAULT_RATE_LIMIT} requisições por minuto por tenant.",
+                detail=f"Máximo de {_RATE_LIMIT_PER_MIN} requisições por minuto por tenant.",
                 instance=request.url.path,
                 extra={"Retry-After": "60"},
             )
 
-        response = await call_next(request)
-        return response
+        return await call_next(request)
+
+    async def _on_limiter_unavailable(self, request: Request, call_next: Any) -> Response:
+        """Redis fora: rejeita (fail-closed) ou segue sem limite (fail-open)."""
+        if _RATE_LIMIT_FAIL_CLOSED:
+            return _problem_json(
+                status=503,
+                title="Limitador indisponível",
+                detail="Rate limiter temporariamente indisponível.",
+                instance=request.url.path,
+                extra={"Retry-After": "5"},
+            )
+        return await call_next(request)
 
 
 def _problem_json(

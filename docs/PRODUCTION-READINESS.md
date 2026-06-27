@@ -20,8 +20,8 @@ infra) em 2026-06-26. Itens marcados ✅ já foram corrigidos na branch
 | P0-4 | **`demoMode=true` + `role=admin` por padrão**; shell nunca hidrata do JWT. | Frontend | ✅ **Parcial** — `demoMode` agora respeita `NEXT_PUBLIC_DEMO_MODE=false`. ⏳ **Falta:** derivar `tenant`/`role` do JWT em vez de defaults fixos. |
 | P0-5 | **Celery conecta como superuser → bypassa RLS** na ingestão. | Infra | ✅ **Corrigido** — `ingest.yml` usa `app_user`/`APP_USER_PASSWORD`. |
 | P0-6 | **CI não buildava o app** — regressões de build passavam despercebidas. | CI | ✅ **Corrigido** — job `frontend-build` (type-check + `next build`). |
-| P0-7 | **Rate limiting em memória** (dict por processo) — não funciona com réplicas, reinicia zerado. | Backend | ⏳ Migrar para Redis `INCR` com TTL; **falhar fechado** (503) se Redis indisponível. |
-| P0-8 | **Chaves JWT efêmeras** se os secrets não forem setados — tokens invalidados a cada restart / divergem entre réplicas. | Segurança | ⏳ Exigir `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` (Docker Secret/Vault); **falhar no boot** se ausentes, sem fallback silencioso. |
+| P0-7 | **Rate limiting em memória** (dict por processo) — não funciona com réplicas, reinicia zerado. | Backend | ✅ **Implementado** — Redis `INCR`+`EXPIRE` por `tenant:minuto` (vale para o cluster), com circuit breaker; fail-open por padrão, `RATE_LIMIT_FAIL_CLOSED=true` para 503. `RATE_LIMIT_PER_MIN` configurável. |
+| P0-8 | **Chaves JWT efêmeras** se os secrets não forem setados — tokens invalidados a cada restart / divergem entre réplicas. | Segurança | ✅ **Implementado** — sem `JWT_PRIVATE_KEY`/`JWT_PUBLIC_KEY` em produção, `_load_keys()` **falha no boot** (sem fallback efêmero); par efêmero só em dev/test, com aviso. |
 | P0-9 | **`alembic` não instalado** — `make migrate` falha; sem caminho de migração de schema. | Infra | ⏳ Adicionar `alembic` aos requirements + runner de migração no startup do container. |
 | P0-10 | **Sem pipeline de deploy** — nenhum build/push/scan de imagem; sem manifests K8s/Helm. | Infra/CI | ⏳ Build+push de imagem, scan (Trivy/Grype), secret scanning, deploy para staging. |
 
