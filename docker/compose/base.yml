@@ -71,6 +71,31 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------------------
+  # Migrações de schema (one-shot) — roda scripts/migrate.py como OWNER do banco
+  # (POSTGRES_USER, direto no Postgres, fora do PgBouncer) antes dos serviços de
+  # aplicação subirem. Os serviços de app devem usar:
+  #   depends_on: { migrate: { condition: service_completed_successfully } }
+  # ---------------------------------------------------------------------------
+  migrate:
+    image: python:3.12-slim
+    container_name: migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MIGRATIONS_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./scripts:/app/scripts:ro
+    working_dir: /app
+    entrypoint:
+      - /bin/sh
+      - -c
+      - pip install --no-cache-dir "sqlalchemy>=2.0,<3" psycopg2-binary && python scripts/migrate.py
+    networks:
+      - juridico-net
+
+  # ---------------------------------------------------------------------------
   # Neo4j 5 Community - Grafo de relações societárias e processos
   # Community: gratuito, sem clustering nativo. Adequado para Fases 0-2.
   # Para Fase 3 (HA): avaliar Enterprise (ver Pendencia.md PD-01).
