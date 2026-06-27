@@ -14,6 +14,7 @@ Em produção:
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any
@@ -27,6 +28,10 @@ except ImportError:
     _JWT_AVAILABLE = False
 
 from services.shared.config import load_secret
+
+logger = logging.getLogger(__name__)
+
+_DEV_ENVS = {"dev", "development", "test"}
 
 ALGORITHM = "RS256"
 TOKEN_EXPIRY_SECONDS = int(os.getenv("JWT_EXPIRY_SECONDS", "3600"))
@@ -52,7 +57,19 @@ def _load_keys() -> tuple[bytes, bytes]:
         _private_key_pem = priv_pem.encode() if isinstance(priv_pem, str) else priv_pem
         _public_key_pem = pub_pem.encode() if isinstance(pub_pem, str) else pub_pem
     else:
-        # Dev fallback: gerar par efêmero (NUNCA em produção — tokens inválidos após restart)
+        # Sem chaves configuradas. FALHAR FECHADO em produção — um par efêmero
+        # invalida todos os tokens a cada restart e diverge entre réplicas.
+        env = os.getenv("ENV", "production").strip().lower()
+        if env not in _DEV_ENVS:
+            raise RuntimeError(
+                "JWT_PRIVATE_KEY/JWT_PUBLIC_KEY ausentes. São obrigatórios em "
+                "produção (Docker Secret/Vault) — sem fallback efêmero."
+            )
+        logger.warning(
+            "Chaves JWT ausentes — gerando par EFÊMERO (apenas %s). "
+            "Tokens invalidam no restart e divergem entre réplicas.",
+            env,
+        )
         _private_key_pem, _public_key_pem = _generate_ephemeral_keypair()
 
     return _private_key_pem, _public_key_pem
