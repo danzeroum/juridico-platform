@@ -5,6 +5,10 @@ services:
       context: ../..
       dockerfile: services/gateway/Dockerfile
     container_name: legalscore-api
+    # Sobe só depois que as migrações de schema rodam com sucesso (one-shot).
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       # Conecta via PgBouncer (pool_mode=transaction) como app_user (NOSUPERUSER).
       # RLS ativa: app_user bypassa FORCE RLS diferente de postgres (superusuário).

@@ -305,3 +305,35 @@ jobs:
       - name: Build app
         working-directory: frontend
         run: pnpm --filter platform build
+
+  # ---------------------------------------------------------------------------
+  # Build da imagem do gateway + scan de vulnerabilidades (Trivy)
+  #
+  # O `docker build` é gate real: quebra se o Dockerfile regredir. O scan Trivy
+  # é report-only por enquanto (não bloqueia no backlog de CVEs existente) —
+  # ver docs/DEPLOY.md para endurecer (exit-code) após triagem.
+  # ---------------------------------------------------------------------------
+  container-scan:
+    name: Container Build & Vuln Scan (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build gateway image
+        run: docker build -f services/gateway/Dockerfile -t juridico-gateway:ci .
+
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Trivy — imagem do gateway (HIGH/CRITICAL, report-only)
+        run: |
+          trivy image --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 0 --format table juridico-gateway:ci || true
+
+      - name: Trivy — segredos no repositório (report-only)
+        run: |
+          trivy fs --scanners secret --exit-code 0 --format table . || true
