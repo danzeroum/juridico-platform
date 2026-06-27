@@ -102,7 +102,7 @@ export default function LoginPage() {
                 className="w-full rounded-[8px] border border-borderStrong bg-surface px-3 py-2.5 text-[13px] text-textPrimary focus:outline-none focus:ring-2 focus:ring-accentTintBorder focus:border-accent"
               >
                 <option value="">Selecionar…</option>
-                <option value="demo">Demo</option>
+                <option value="dev-tenant">Desenvolvimento</option>
               </select>
             </div>
 
