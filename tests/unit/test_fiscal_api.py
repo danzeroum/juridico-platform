@@ -104,10 +104,9 @@ class TestEnrich:
         return buf.getvalue()
 
     def test_enrich_202(self, client, monkeypatch):
-        import celery
-
+        # Sem depender de celery/minio no ambiente de teste: mocka storage + despacho.
         monkeypatch.setattr("services.fiscal.storage.upload_spreadsheet", lambda key, data: key)
-        monkeypatch.setattr(celery.current_app, "send_task", lambda *a, **k: None)
+        monkeypatch.setattr(fiscal_router, "_enqueue_enrich", lambda *a, **k: None)
 
         r = client.post(
             "/api/v1/fiscal/spreadsheet/enrich",
