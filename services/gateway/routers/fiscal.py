@@ -198,12 +198,7 @@ async def enrich(
         pass  # Redis indisponível — job segue via Celery; polling degradado.
 
     try:
-        from celery import current_app as celery_app
-        celery_app.send_task(
-            "fiscal.tasks.enrich_spreadsheet",
-            args=[job_id, tenant_id, spreadsheet_key, uf_origem.upper()],
-            queue="fiscal",
-        )
+        _enqueue_enrich(job_id, tenant_id, spreadsheet_key, uf_origem.upper())
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Fila indisponível: {exc}") from exc
 
@@ -221,6 +216,17 @@ def _lazy_create_job():
         # Reaproveita o rastreador de jobs em Redis do scoring (mesmo formato).
         create_batch_job(redis, [None] * total, tenant_id)
     return _create
+
+
+def _enqueue_enrich(job_id: str, tenant_id: str, spreadsheet_key: str, uf_origem: str) -> None:
+    """Despacho da task de enriquecimento (isolado p/ ser mockável nos testes de API)."""
+    from celery import current_app as celery_app
+
+    celery_app.send_task(
+        "fiscal.tasks.enrich_spreadsheet",
+        args=[job_id, tenant_id, spreadsheet_key, uf_origem],
+        queue="fiscal",
+    )
 
 
 @router.get("/jobs/{job_id}", summary="Status do job de enriquecimento")
