@@ -13,13 +13,14 @@ from typing import Any
 
 import requests
 from celery.utils.log import get_task_logger
-from ingest.celery_app import app
-from ingest.contracts.pgfn import PgfnDevedorBronze
-from ingest.pipeline.base import add_linage, get_circuit_breaker, reconcile
-from ingest.pipeline.quality import pgfn_bronze_to_silver
 from pydantic import ValidationError
-from shared.config import settings
-from shared.redis_client import get_redis
+
+from services.ingest.celery_app import app
+from services.ingest.contracts.pgfn import PgfnDevedorBronze
+from services.ingest.pipeline.base import add_linage, get_circuit_breaker, reconcile
+from services.ingest.pipeline.quality import pgfn_bronze_to_silver
+from services.shared.config import settings
+from services.shared.redis_client import get_redis
 
 logger = get_task_logger(__name__)
 

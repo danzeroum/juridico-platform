@@ -19,7 +19,7 @@ import io
 import logging
 import os
 
-from taxpredict.celery_app import app
+from services.taxpredict.celery_app import app
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +38,9 @@ def recalibrate_model(self, materia: str = "PIS_COFINS") -> dict:
     try:
         import pandas as pd
         from minio import Minio
-        from shared.config import settings
 
-        from taxpredict.model.bayesian import TaxPredictionModel
+        from services.shared.config import settings
+        from services.taxpredict.model.bayesian import TaxPredictionModel
 
         minio = Minio(
             settings.MINIO_URL.replace("http://", "").replace("https://", ""),

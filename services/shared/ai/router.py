@@ -45,12 +45,12 @@ class LLMRouter:
 
     def _ollama_client(self, model: str):
         # TODO: implementar cliente Ollama na Fase 1
-        from shared.config import settings
+        from services.shared.config import settings
         return {"url": settings.OLLAMA_URL, "model": model}
 
     def _openai_client(self, model: str):
         # TODO: implementar cliente OpenAI na Fase 1
-        from shared.config import settings
+        from services.shared.config import settings
         return {"api_key": settings.LLM_API_KEY, "model": model}
 
 

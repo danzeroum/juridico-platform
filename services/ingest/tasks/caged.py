@@ -12,9 +12,9 @@ import logging
 
 import requests
 from celery.utils.log import get_task_logger
-from ingest.celery_app import app
 from pydantic import ValidationError
 
+from services.ingest.celery_app import app
 from services.ingest.contracts.caged import (
     TRANSFORM_VERSION,
     CagedEstabelecimentoBronze,

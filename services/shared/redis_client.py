@@ -5,7 +5,7 @@ Usado para cache de LLM, sessoes e filas Celery.
 
 import redis
 
-from shared.config import settings
+from services.shared.config import settings
 
 _redis_client = None
 

@@ -28,7 +28,7 @@ class RAGEngine:
         if self._chroma_client is None:
             import chromadb
 
-            from shared.config import settings
+            from services.shared.config import settings
             self._chroma_client = chromadb.HttpClient(
                 host=settings.CHROMA_URL.replace("http://", "").split(":")[0],
                 port=int(settings.CHROMA_URL.split(":")[-1]),
@@ -41,7 +41,7 @@ class RAGEngine:
         Retorna None se Ollama indisponível — ChromaDB usa embedder padrão.
         """
         try:
-            from shared.config import settings
+            from services.shared.config import settings
             payload = json.dumps({"model": "bge-m3", "prompt": text}).encode()
             req = urllib.request.Request(
                 f"{settings.OLLAMA_URL}/api/embeddings",

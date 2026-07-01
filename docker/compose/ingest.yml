@@ -11,7 +11,7 @@ services:
       dockerfile: services/ingest/Dockerfile
     container_name: celery-worker
     restart: unless-stopped
-    command: celery -A ingest.celery_app worker --loglevel=info -Q daily,weekly,monthly,hourly,batch --concurrency=4
+    command: celery -A services.ingest.celery_app worker --loglevel=info -Q daily,weekly,monthly,hourly,batch --concurrency=4
     environment:
       - DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -46,7 +46,7 @@ services:
       dockerfile: services/ingest/Dockerfile
     container_name: celery-beat
     restart: unless-stopped
-    command: celery -A ingest.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A services.ingest.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
       - DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0

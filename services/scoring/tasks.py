@@ -12,12 +12,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
 
-from shared.contracts.scoring import ScoreRequest as EngineScoreRequest
-from shared.redis_client import get_redis
-
-from scoring.celery_app import app
-from scoring.features import assemble_features
-from scoring.idempotency import update_batch_progress
+from services.scoring.celery_app import app
+from services.scoring.features import assemble_features
+from services.scoring.idempotency import update_batch_progress
+from services.shared.contracts.scoring import ScoreRequest as EngineScoreRequest
+from services.shared.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ _MAX_WORKERS = 20  # thread-pool: I/O-bound (Redis gets)
 
 def _score_single(cnpj: str, redis: Any) -> dict:
     """Score de um único CNPJ. Chamado em thread-pool."""
-    from scoring.engine.factory import get_score_engine
+    from services.scoring.engine.factory import get_score_engine
 
     try:
         fv = assemble_features(cnpj, redis)

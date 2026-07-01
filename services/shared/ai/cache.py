@@ -10,7 +10,7 @@ import json
 import logging
 from functools import wraps
 
-from shared.redis_client import get_redis
+from services.shared.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
