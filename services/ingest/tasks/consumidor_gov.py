@@ -25,7 +25,8 @@ from services.shared.config import settings
 
 try:
     from celery.utils.log import get_task_logger
-    from ingest.celery_app import app as _celery_app
+
+    from services.ingest.celery_app import app as _celery_app
 
     logger = get_task_logger(__name__)
     _CELERY = True
