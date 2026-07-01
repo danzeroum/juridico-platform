@@ -3,7 +3,7 @@
 > **Plataforma Jurídico-Contábil Docker-First** — IA aplicada ao direito e contabilidade brasileira
 
 [![SLA](https://img.shields.io/badge/SLA-99.0%25_n%C3%B3_único-yellow)](#)
-[![Produtos](https://img.shields.io/badge/produtos-8-blue)](#)
+[![Produtos](https://img.shields.io/badge/produtos-9-blue)](#)
 [![Stack](https://img.shields.io/badge/stack-Docker%20Compose-2496ED)](#)
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#)
 
@@ -19,6 +19,7 @@
 | 6 | **DanoBot** | Laudo de danos socioeconômicos automatizado | p95 < 5s |
 | 7 | **PetiBot** | Gerador de peças processuais com jurisprudência | p95 < 10s |
 | 8 | **ConciliaIA** | Análise de viabilidade de acordos | p95 < 3s |
+| 9 | **FiscalEngine** | Triagem de NCM + resolução de ICMS (interno/interestadual/DIFAL) e enriquecimento de planilhas | p95 < 2s (triagem) |
 
 ## Stack Tecnológico
 

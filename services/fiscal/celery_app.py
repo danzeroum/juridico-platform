@@ -9,3 +9,8 @@ app = Celery(
 )
 app.conf.timezone = 'America/Sao_Paulo'
 app.conf.task_default_queue = 'fiscal'
+
+# Registro explícito das tasks — o worker (`-A services.fiscal.celery_app`) importa
+# o módulo do app, mas NÃO as tasks; sem isto, classify_chunk/finalize_enrichment/
+# enrich_spreadsheet ficam não-registradas e o send_task do gateway não executa.
+app.conf.include = ['services.fiscal.tasks']
