@@ -27,7 +27,7 @@ from services.ingest.pipeline.base import (
 logger = logging.getLogger(__name__)
 
 try:
-    from services.ingest.celery_app import app
+    from services.fiscal.celery_app import app
 except Exception:  # pragma: no cover - contexto sem broker
     app = None  # type: ignore[assignment]
 
@@ -145,8 +145,8 @@ if app is not None:  # pragma: no cover - só quando o broker Celery existe
         bind=True,
         autoretry_for=(requests.RequestException,),
         retry_kwargs={"max_retries": 5},
-        queue="monthly",
-        name="ingest.tasks.rfb_tipi.run_ingest",
+        queue="fiscal_ingest",
+        name="fiscal.ingestion.rfb_tipi.run_ingest",
     )
     def run_ingest(self, url: str | None = None) -> dict:
         target = url or os.getenv(

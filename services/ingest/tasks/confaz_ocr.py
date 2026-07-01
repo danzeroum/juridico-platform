@@ -25,7 +25,7 @@ from services.ingest.pipeline.base import get_circuit_breaker
 logger = logging.getLogger(__name__)
 
 try:
-    from services.ingest.celery_app import app
+    from services.fiscal.celery_app import app
 except Exception:  # pragma: no cover - contexto sem broker
     app = None  # type: ignore[assignment]
 
@@ -85,8 +85,8 @@ if app is not None:  # pragma: no cover - só quando o broker Celery existe
         bind=True,
         autoretry_for=(requests.RequestException,),
         retry_kwargs={"max_retries": 3},
-        queue="weekly",
-        name="ingest.tasks.confaz_ocr.run_ingest",
+        queue="fiscal_ingest",
+        name="fiscal.ingestion.confaz_ocr.run_ingest",
     )
     def run_ingest(self, pdf_url: str) -> dict:
         breaker = get_circuit_breaker("CONFAZ")

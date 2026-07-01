@@ -18,7 +18,7 @@ from services.ingest.pipeline.base import get_circuit_breaker, reconcile
 logger = logging.getLogger(__name__)
 
 try:
-    from services.ingest.celery_app import app
+    from services.fiscal.celery_app import app
 except Exception:  # pragma: no cover - contexto sem broker
     app = None  # type: ignore[assignment]
 
@@ -87,6 +87,6 @@ def _run(uf: str, url: str | None = None) -> dict:
 
 if app is not None:  # pragma: no cover - só quando o broker Celery existe
 
-    @app.task(bind=True, queue="weekly", name="ingest.tasks.sefaz_scraper.run_ingest")
+    @app.task(bind=True, queue="fiscal_ingest", name="fiscal.ingestion.sefaz_scraper.run_ingest")
     def run_ingest(self, uf: str, url: str | None = None) -> dict:
         return _run(uf.upper(), url)
