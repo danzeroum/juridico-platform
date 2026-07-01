@@ -47,7 +47,16 @@ jobs:
             cryptography==43.0.3 \
             openpyxl==3.1.5 \
             rapidfuzz==3.10.1 \
+            beautifulsoup4==4.12.3 \
+            lxml==5.3.0 \
+            pdfplumber==0.11.4 \
+            pymupdf==1.24.10 \
+            pillow==10.4.0 \
+            playwright==1.47.0 \
             "sqlalchemy>=2.0,<3" || true
+
+      - name: Instalar Chromium do Playwright (testes reais de navegador; skip se falhar)
+        run: python -m playwright install --with-deps chromium || true
 
       - name: Run unit tests with coverage
         run: |
