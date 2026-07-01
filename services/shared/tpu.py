@@ -13,54 +13,22 @@ de normalização, consumida por:
 Fica em `services/shared/` (par de `lgpd.py`) por ser dado de referência puro,
 sem PII e sem escopo de tenant, evitando import serviço→ingest.
 
-Carregamento: lê os JSON-semente de `services/shared/data/`. Se ausentes,
-degrada para dicionário embutido mínimo — nunca levanta na importação. A tabela
-completa vive em `jurimetria.tpu_classe`/`tpu_assunto` (migração 004), populada
-pela ingestão; este módulo é o bootstrap/fallback offline.
+Carregamento: usa a semente Python `services/shared/tpu_seed.py` (versionada e
+sempre presente). A tabela COMPLETA vive em `jurimetria.tpu_classe`/`tpu_assunto`
+(migração 004), populada pela ingestão; este módulo é o normalizador offline.
 """
 from __future__ import annotations
 
-import json
-import logging
-from functools import lru_cache
-from pathlib import Path
-
-logger = logging.getLogger(__name__)
-
-_DATA_DIR = Path(__file__).resolve().parent / "data"
-
-# Fallback embutido mínimo (caso os JSON não estejam presentes no deploy).
-_FALLBACK_CLASSES: dict[str, dict] = {
-    "7": {"label": "Procedimento Comum Cível", "parent": None},
-    "985": {"label": "Ação Trabalhista - Rito Ordinário", "parent": None},
-    "1125": {"label": "Recuperação Judicial", "parent": None},
-}
-_FALLBACK_ASSUNTOS: dict[str, dict] = {
-    "864": {"label": "DIREITO DO TRABALHO", "parent": None, "ramo": "TRABALHISTA"},
-    "899": {"label": "DIREITO TRIBUTÁRIO", "parent": None, "ramo": "TRIBUTARIO"},
-    "10375": {"label": "Recuperação Judicial e Falência", "parent": None, "ramo": "EMPRESARIAL"},
-}
+from services.shared.tpu_seed import ASSUNTOS as _ASSUNTOS
+from services.shared.tpu_seed import CLASSES as _CLASSES
 
 
-def _load(filename: str, key: str, fallback: dict[str, dict]) -> dict[str, dict]:
-    path = _DATA_DIR / filename
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        table = raw.get(key, {})
-        return {str(k): v for k, v in table.items()} if table else dict(fallback)
-    except (OSError, ValueError) as exc:
-        logger.warning("TPU: falha ao carregar %s (%s) — usando fallback embutido", filename, exc)
-        return dict(fallback)
-
-
-@lru_cache(maxsize=1)
 def _classes() -> dict[str, dict]:
-    return _load("tpu_classes.json", "classes", _FALLBACK_CLASSES)
+    return _CLASSES
 
 
-@lru_cache(maxsize=1)
 def _assuntos() -> dict[str, dict]:
-    return _load("tpu_assuntos.json", "assuntos", _FALLBACK_ASSUNTOS)
+    return _ASSUNTOS
 
 
 def _clean_code(codigo: str | int | None) -> str | None:
