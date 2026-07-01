@@ -9,3 +9,7 @@ app = Celery(
 )
 app.conf.timezone = 'America/Sao_Paulo'
 app.conf.task_default_queue = 'scoring'
+
+# Registro explícito das tasks — sem isto, run_batch_score fica não-registrada e o
+# send_task do gateway (batch de scoring) não executa no worker.
+app.conf.include = ['services.scoring.tasks']
