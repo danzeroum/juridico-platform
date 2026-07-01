@@ -1,4 +1,4 @@
-.PHONY: help up down logs migrate test load-test backup health ingest-datajud ingest-caged ingest-ibge ingest-consumidor ingest-all dash secrets-init
+.PHONY: help up down logs migrate test load-test backup health ingest-datajud ingest-caged ingest-ibge ingest-consumidor ingest-abj jurimetria-aggregate ingest-all dash secrets-init
 
 COMPOSE_FILES := -f docker-compose.yml
 
@@ -74,6 +74,14 @@ CONSUMIDOR_URL ?=
 ingest-consumidor: ## Dispara ingest do Consumidor.gov (use CONSUMIDOR_URL=<csv>)
 	docker compose $(COMPOSE_FILES) exec celery-worker \
 		celery -A ingest.celery_app call ingest.tasks.consumidor_gov.run_ingest --args='["$(CONSUMIDOR_URL)"]'
+
+ingest-abj: ## Dispara ingest manual da ABJ (requer ABJ_ENABLED=true)
+	docker compose $(COMPOSE_FILES) exec celery-worker \
+		celery -A ingest.celery_app call ingest.tasks.abj.run_monthly_ingest
+
+jurimetria-aggregate: ## Recomputa jurimetria.indicador (DATAJUD + ABJ)
+	docker compose $(COMPOSE_FILES) exec celery-worker \
+		celery -A ingest.celery_app call ingest.tasks.jurimetria_aggregate.run_aggregation
 
 ingest-all: ## Dispara todos os ingests manualmente
 	@$(MAKE) ingest-datajud

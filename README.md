@@ -104,6 +104,7 @@ make dash         # Abre Grafana + Prometheus + Flower
 | Câmara Deputados | Legislação | On-demand |
 | BCB/ESTBAN | Indicadores bancários | Mensal |
 | IBGE | Dados municipais | Anual |
+| ABJ (jurimetria) | Indicadores jurimétricos / TPU | Mensal (opt-in) |
 
 ## Roadmap
 

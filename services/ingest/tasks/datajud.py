@@ -21,12 +21,14 @@ from services.ingest.pipeline.base import (
     add_linage,
     compute_lag_days,
     get_circuit_breaker,
+    persist_silver,
     reconcile,
 )
 from services.ingest.pipeline.quality import datajud_bronze_to_silver
 from services.shared.config import settings
 from services.shared.lgpd import pseudonymize_process_record
 from services.shared.redis_client import get_redis
+from services.shared.storage.neo4j_client import upsert_process_edges
 
 logger = get_task_logger(__name__)
 
@@ -95,6 +97,8 @@ def run_daily_ingest(self, date: str | None = None) -> dict:
     records_in = len(items)
     processed = 0
     rejected = 0
+    bronze_batch: list[dict] = []
+    silver_batch: list[dict] = []
 
     for raw in items:
         # 1. Linage fields adicionados antes de qualquer processamento
@@ -110,20 +114,32 @@ def run_daily_ingest(self, date: str | None = None) -> dict:
         # 3. Pseudonimização HMAC (LGPD) — antes de qualquer storage
         pseudo = pseudonymize_process_record(bronze.model_dump())
 
-        # 4. Bronze → Silver (qualidade: outliers, faltantes, log1p)
+        # 4. Bronze → Silver (qualidade + normalização TPU de classe/assunto)
         silver = datajud_bronze_to_silver(bronze.model_dump(), pseudo)
 
-        # 5. Persistência (bronze: MinIO/S3; silver: OpenSearch + Neo4j)
-        # TODO Fase 1b: persistir bronze em MinIO (bucket privado)
-        # TODO Fase 1b: indexar silver em OpenSearch (índice datajud-silver-YYYY-MM)
-        # TODO Fase 1b: criar nó/aresta em Neo4j (CNPJ → PROCESSO)
-        _ = silver  # evita F841 enquanto persistência não está implementada
-
+        # 5. Acumula para persistência em batelada (bulk é 10-100x mais barato
+        #    que por-registro em OpenSearch/Neo4j). O bronze gravado é o registro
+        #    JÁ pseudonimizado — nunca PII em claro em nenhum store.
+        bronze_batch.append(pseudo)
+        silver_batch.append(silver)
         processed += 1
+
+    # 6. Persistência durável (Fase 1b): bronze→MinIO, silver→OpenSearch, grafo→Neo4j.
+    #    Degradação graciosa por store dentro de persist_silver.
+    persist_result = persist_silver(
+        source="DATAJUD",
+        date_str=date,
+        bronze_records=bronze_batch,
+        silver_records=silver_batch,
+        opensearch_index=f"datajud-silver-{date[:7]}",
+        graph_writer=upsert_process_edges,
+        id_field="id_processo",
+    )
 
     rec = reconcile("DATAJUD", records_in, processed, date)
     logger.info(
-        "DATAJUD ingest concluído: %d processados, %d rejeitados (schema), lag=%d dias. Rec: %s",
-        processed, rejected, with_linage.get("data_source_lag_days", -1), rec,
+        "DATAJUD ingest concluído: %d processados, %d rejeitados (schema), lag=%d dias. "
+        "Persist: %s. Rec: %s",
+        processed, rejected, with_linage.get("data_source_lag_days", -1), persist_result, rec,
     )
-    return {**rec, "rejected": rejected}
+    return {**rec, "rejected": rejected, "persist": persist_result}

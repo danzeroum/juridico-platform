@@ -8,6 +8,7 @@ Todas as tarefas de ingestão usam `add_linage` antes de salvar no bronze e
 import logging
 import math
 import time
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any
@@ -118,3 +119,71 @@ def safe_log1p(value: float | None) -> float:
     if value is None or value < 0:
         return 0.0
     return math.log1p(value)
+
+
+def persist_silver(
+    source: str,
+    date_str: str,
+    bronze_records: list[dict[str, Any]],
+    silver_records: list[dict[str, Any]],
+    *,
+    opensearch_index: str | None = None,
+    graph_writer: Callable[[list[dict[str, Any]]], int] | None = None,
+    id_field: str = "id_processo",
+) -> dict[str, Any]:
+    """
+    Sink DRY de persistência durável, chamado por todas as tasks de ingestão
+    (plano Fase 1b). Encerra o TODO histórico do DATAJUD e evita que cada task
+    refaça a fiação de três stores.
+
+    Ordem e responsabilidades:
+    1. bronze  → MinIO (JSONL particionado, `bronze-<source>/dt=.../part-*.jsonl`)
+    2. silver  → OpenSearch (índice `opensearch_index`, se fornecido)
+    3. grafo   → `graph_writer(silver_records)` (só o DATAJUD passa arestas; as
+       demais fontes passam None)
+
+    **Degradação graciosa:** cada store é isolado; a falha de um é logada e
+    contada em `errors`, nunca aborta os demais nem a task. Coerente com o
+    circuit breaker por fonte.
+
+    IMPORTANTE (LGPD): `silver_records`/`bronze_records` devem já estar
+    pseudonimizados pelo chamador — este sink não toca PII, só grava.
+    """
+    counts: dict[str, Any] = {
+        "source": source,
+        "date": date_str,
+        "bronze": 0,
+        "opensearch": 0,
+        "graph": 0,
+        "errors": [],
+    }
+
+    # 1. Bronze → MinIO
+    try:
+        from services.shared.storage.minio_client import put_jsonl
+
+        put_jsonl(source, date_str, bronze_records)
+        counts["bronze"] = len(bronze_records)
+    except Exception as exc:  # noqa: BLE001 — degradação graciosa por store
+        logger.warning("persist_silver[%s]: falha MinIO bronze: %s", source, exc)
+        counts["errors"].append(f"minio:{exc}")
+
+    # 2. Silver → OpenSearch
+    if opensearch_index:
+        try:
+            from services.shared.storage.opensearch_client import bulk_index
+
+            counts["opensearch"] = bulk_index(opensearch_index, silver_records, id_field=id_field)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("persist_silver[%s]: falha OpenSearch: %s", source, exc)
+            counts["errors"].append(f"opensearch:{exc}")
+
+    # 3. Grafo → Neo4j (opcional por fonte)
+    if graph_writer is not None:
+        try:
+            counts["graph"] = graph_writer(silver_records)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("persist_silver[%s]: falha grafo: %s", source, exc)
+            counts["errors"].append(f"graph:{exc}")
+
+    return counts

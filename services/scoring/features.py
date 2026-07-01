@@ -80,8 +80,17 @@ def assemble_features(cnpj: str, redis_client: Any) -> FeatureVector:
     else:
         sources_missing.append("RECEITA")
 
-    # ── DATAJUD: processos — Fase 1c (Neo4j) ────────────────────────────────
-    sources_missing.append("DATAJUD")
+    # ── DATAJUD: processos — Neo4j (grafo PARTE_EM populado pela ingestão) ───
+    datajud = _fetch_datajud(cnpj)
+    if datajud and datajud.get("total", 0) > 0:
+        features["processos_ativos"] = float(datajud["total"])
+        features["processos_trabalhistas"] = float(datajud.get("trabalhistas", 0))
+        features["processos_repetitivos"] = float(datajud.get("repetitivos", 0))
+        sources_used.append("DATAJUD")
+    else:
+        # Grafo vazio para o CNPJ OU indisponível: mantém features em 0.0 e marca
+        # a fonte como ausente (score parcial, coerente com degradação graciosa).
+        sources_missing.append("DATAJUD")
 
     is_partial = len(sources_missing) > 0
 
@@ -106,6 +115,20 @@ def _fetch_pgfn(cnpj: str, redis_client: Any) -> dict[str, Any] | None:
         return pgfn_bronze_to_silver(data)
     except Exception as exc:
         logger.warning("PGFN cache parse error for %s: %s", cnpj, exc)
+        return None
+
+
+def _fetch_datajud(cnpj: str) -> dict[str, Any] | None:
+    """
+    Contagens de processos da empresa a partir do grafo Neo4j (arestas PARTE_EM
+    criadas pela ingestão DATAJUD). Degradação graciosa: qualquer falha do grafo
+    devolve None → feature ausente, nunca 500.
+    """
+    try:
+        from services.shared.storage.neo4j_client import count_processos_por_cnpj
+        return count_processos_por_cnpj(cnpj)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("DATAJUD/Neo4j indisponível para %s: %s", cnpj, exc)
         return None
 
 

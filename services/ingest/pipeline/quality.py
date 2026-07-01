@@ -12,6 +12,8 @@ Bronze → Silver:
 from datetime import date
 from typing import Any
 
+from services.shared.tpu import assunto_ramo, normalize_assunto, normalize_classe
+
 from .base import safe_log1p
 
 
@@ -85,6 +87,16 @@ def datajud_bronze_to_silver(
     silver = treat_missing_valor_causa(silver)
     silver = add_valor_log(silver)
     silver = add_recencia(silver, date_field="data_julgamento")
+
+    # Normalização TPU: classe/assunto canônicos + ramo do direito.
+    # Chaves canônicas tornam as agregações jurimétricas consistentes entre tribunais.
+    classe_tpu, classe_label = normalize_classe(bronze.get("classe"))
+    assunto_tpu, assunto_label = normalize_assunto(bronze.get("assunto"))
+    silver["classe_tpu"] = classe_tpu
+    silver["classe_label"] = classe_label
+    silver["assunto_tpu"] = assunto_tpu
+    silver["assunto_label"] = assunto_label
+    silver["ramo"] = assunto_ramo(bronze.get("assunto"))
 
     # Linage original preservada
     silver.setdefault("ingested_at", bronze.get("ingested_at"))
