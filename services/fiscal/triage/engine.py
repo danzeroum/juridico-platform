@@ -17,6 +17,10 @@ from services.fiscal.triage.ncm_matcher import (
     match_exact,
     match_fuzzy,
 )
+from services.fiscal.triage.semantic import (
+    SemanticNcmSource,
+    hits_to_candidate,
+)
 from services.shared.contracts.fiscal import (
     NcmTriageRequest,
     NcmTriageResult,
@@ -41,17 +45,21 @@ def classify(
     ncm_source: NcmSource,
     icms_source: IcmsSource,
     category_source: CategorySource | None = None,
+    semantic_source: SemanticNcmSource | None = None,
     *,
     fuzzy_threshold: float = DEFAULT_FUZZY_THRESHOLD,
 ) -> NcmTriageResult:
     """
     Classifica um item: descrição → NCM → ICMS. Determinístico e puro.
     `decision_proof` fica None aqui — é preenchido na etapa de ancoragem.
+
+    Sem `ncm_hint`, tenta fuzzy léxico; se a confiança for baixa e houver
+    `semantic_source` (RAG/embeddings), usa a sugestão semântica como fallback.
     """
     observacoes: list[str] = []
     conflito = False
 
-    # 1. NCM: prioriza hint (lookup exato); senão, fuzzy.
+    # 1. NCM: prioriza hint (lookup exato); senão, fuzzy + fallback semântico.
     if request.ncm_hint:
         row = ncm_source.get_ncm(request.ncm_hint, request.data)
         candidate = match_exact(request.ncm_hint, row)
@@ -64,10 +72,22 @@ def classify(
         candidate, fuzzy_conflito = match_fuzzy(
             request.descricao, ncm_source.catalog(request.data), threshold=fuzzy_threshold
         )
-        conflito = conflito or fuzzy_conflito
+        conflito = fuzzy_conflito
+
+        # Fallback semântico quando o fuzzy é fraco (léxico não cobre termo comercial).
+        if semantic_source is not None and (candidate is None or fuzzy_conflito):
+            sem_cand, sem_conflito = hits_to_candidate(semantic_source.suggest(request.descricao))
+            if sem_cand is not None and (not sem_conflito or candidate is None):
+                candidate = sem_cand
+                conflito = sem_conflito
+                observacoes.append(
+                    f"NCM sugerido por busca semântica (RAG), confiança {sem_cand.confidence:.2f}."
+                    + ("" if not sem_conflito else " Baixa confiança — revisar.")
+                )
+
         if candidate is None:
             observacoes.append("Não foi possível sugerir NCM a partir da descrição — revisão manual.")
-        elif fuzzy_conflito:
+        elif conflito and candidate.fonte_regra.value == "FUZZY":
             observacoes.append(
                 f"NCM sugerido por similaridade com baixa confiança ({candidate.confidence:.2f}) — revisar."
             )
