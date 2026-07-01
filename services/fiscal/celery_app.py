@@ -23,16 +23,21 @@ app.conf.include = [
     'services.ingest.tasks.rfb_tipi',
     'services.ingest.tasks.sefaz_scraper',
     'services.ingest.tasks.confaz_ocr',
+    'services.ingest.tasks.confaz_discovery',
     'services.ingest.tasks.ncm_history',
 ]
 
 # Agendamento (Celery Beat) das tasks com fonte/periodicidade bem definidas.
-# CONFAZ e ncm_migração NÃO são agendados aqui: exigem descoberta de links / URL
-# de fonte (a definir) — disparados sob demanda por ora.
+# A descoberta do CONFAZ (confaz_discovery) enfileira o confaz_ocr por link; o
+# ncm_migração continua sob demanda (sem URL de fonte padrão).
 app.conf.beat_schedule = {
     'rfb-tipi-mensal': {
         'task': 'fiscal.ingestion.rfb_tipi.run_ingest',
         'schedule': crontab(minute=17, hour=3, day_of_month=1),
+    },
+    'confaz-descoberta-semanal': {
+        'task': 'fiscal.ingestion.confaz_discovery.run_ingest',
+        'schedule': crontab(minute=7, hour=5, day_of_week=1),
     },
     'sefaz-sp-semanal': {
         'task': 'fiscal.ingestion.sefaz_scraper.run_ingest',
