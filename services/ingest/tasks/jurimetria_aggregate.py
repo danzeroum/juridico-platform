@@ -17,14 +17,25 @@ O núcleo de merge (`build_indicador_rows`) é PURO e testável sem infra.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from celery.utils.log import get_task_logger
-
-from services.ingest.celery_app import app
 from services.ingest.pipeline.base import reconcile
 
-logger = get_task_logger(__name__)
+# Celery é dependência do worker, não do ambiente de teste unitário. Import
+# guardado para que o módulo (e o núcleo puro build_indicador_rows) seja
+# importável sem Celery — mesmo padrão de tasks/consumidor_gov.py, ibge.py etc.
+try:
+    from celery.utils.log import get_task_logger
+
+    from services.ingest.celery_app import app as _celery_app
+
+    logger = get_task_logger(__name__)
+    _CELERY = True
+except (ImportError, ModuleNotFoundError):
+    logger = logging.getLogger(__name__)
+    _celery_app = None  # type: ignore[assignment]
+    _CELERY = False
 
 
 # ---------------------------------------------------------------------------
@@ -202,8 +213,7 @@ def _upsert_indicador(rows: list[dict[str, Any]]) -> int:
     return len(rows)
 
 
-@app.task(bind=True, queue="monthly")
-def run_aggregation(self) -> dict:
+def _run_aggregation() -> dict:
     """Recomputa jurimetria.indicador. Idempotente (upsert)."""
     datajud_buckets = _query_datajud_buckets()
     abj_rows = _load_abj_rows()
@@ -212,3 +222,12 @@ def run_aggregation(self) -> dict:
     rec = reconcile("JURIMETRIA_AGG", len(datajud_buckets) + len(abj_rows), written, "agg")
     logger.info("JURIMETRIA_AGG: %s", rec)
     return rec
+
+
+if _CELERY:
+    @_celery_app.task(bind=True, queue="monthly")
+    def run_aggregation(self) -> dict:  # noqa: ANN001
+        return _run_aggregation()
+else:
+    def run_aggregation() -> dict:  # type: ignore[misc]
+        return _run_aggregation()
