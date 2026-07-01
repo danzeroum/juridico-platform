@@ -1,0 +1,43 @@
+# =============================================================================
+# FISCAL — Worker do FiscalEngine (triagem NCM/ICMS + enriquecimento de planilhas)
+#
+# Escala horizontal: `docker compose -f ... up --scale fiscal-worker=N`. O fan-out
+# do enriquecimento (chord) distribui os chunks entre as réplicas; cada subtask é
+# do mesmo tenant, então o escopo de SET LOCAL app.tenant_id é preservado.
+#
+# Os pipelines de ingestão (rfb_tipi, sefaz_scraper, confaz_ocr, ibge, diário) são
+# tasks do app `ingest` e rodam no celery-worker de docker/compose/ingest.yml
+# (filas monthly/weekly/daily); o worker fiscal cuida da triagem/enriquecimento.
+# =============================================================================
+
+services:
+
+  fiscal-worker:
+    build:
+      context: .
+      dockerfile: services/fiscal/Dockerfile
+    restart: unless-stopped
+    command: celery -A services.fiscal.celery_app worker --loglevel=info -Q fiscal,batch --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - MINIO_URL=http://minio:9000
+      - MINIO_USER=${MINIO_USER}
+      - MINIO_PASSWORD=${MINIO_PASSWORD}
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - juridico-net
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2"
+
+networks:
+  juridico-net:
+    external: true
