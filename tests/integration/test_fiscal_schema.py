@@ -89,24 +89,24 @@ class TestSeed:
 
 class TestIntegridadeTemporal:
     def test_exclude_impede_vigencia_sobreposta(self, engine):
-        """Duas vigências abertas para o mesmo (uf, prefix) devem violar o EXCLUDE."""
+        """Duas vigências abertas para o mesmo (uf, prefix) devem violar o EXCLUDE.
+
+        Os inserts ficam em transações separadas: um IntegrityError aborta a
+        transação corrente, então tentar as duas na mesma transação quebraria o
+        COMMIT em vez de exercitar o constraint.
+        """
         from sqlalchemy.exc import IntegrityError
 
+        ins = (
+            "INSERT INTO fiscal.icms_interno (uf, ncm_prefix, aliquota_pct, source) "
+            "VALUES ('ZZ', NULL, :a, 'TEST')"
+        )
         try:
             with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        "INSERT INTO fiscal.icms_interno (uf, ncm_prefix, aliquota_pct, source) "
-                        "VALUES ('ZZ', NULL, 10.0, 'TEST')"
-                    )
-                )
-                with pytest.raises(IntegrityError):
-                    conn.execute(
-                        text(
-                            "INSERT INTO fiscal.icms_interno (uf, ncm_prefix, aliquota_pct, source) "
-                            "VALUES ('ZZ', NULL, 12.0, 'TEST')"
-                        )
-                    )
+                conn.execute(text(ins), {"a": 10.0})  # primeira vigência aberta: OK
+            with pytest.raises(IntegrityError):
+                with engine.begin() as conn:
+                    conn.execute(text(ins), {"a": 12.0})  # sobreposição → viola EXCLUDE
         finally:
             with engine.begin() as conn:
                 conn.execute(text("DELETE FROM fiscal.icms_interno WHERE source='TEST'"))

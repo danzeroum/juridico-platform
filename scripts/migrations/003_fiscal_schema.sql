@@ -11,6 +11,11 @@
 
 CREATE SCHEMA IF NOT EXISTS fiscal;
 
+-- app_user precisa de USAGE no schema para acessar qualquer objeto (mesmo padrão
+-- dos schemas ledger/tenant/ingest em bootstrap-db.sql). Sem isso: "permission
+-- denied for schema fiscal".
+GRANT USAGE ON SCHEMA fiscal TO app_user;
+
 -- btree_gist habilita operador `=` sobre tipos escalares dentro de índices/constraints
 -- GiST — necessário para as constraints EXCLUDE de não-sobreposição de vigência.
 CREATE EXTENSION IF NOT EXISTS btree_gist;

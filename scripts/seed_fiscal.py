@@ -18,8 +18,14 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
-from services.shared.contracts.fiscal import UF, aliquota_interestadual
+# Permite `python scripts/seed_fiscal.py` a partir da raiz do repo: ao rodar um
+# script, sys.path[0] é a pasta scripts/, não a raiz — insere a raiz para que
+# o pacote `services` seja importável.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from services.shared.contracts.fiscal import UF, aliquota_interestadual  # noqa: E402
 
 SOURCE_INTER = "SENADO-SEED"
 SOURCE_INTERNO = "SEFAZ-SEED"
