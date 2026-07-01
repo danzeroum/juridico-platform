@@ -14,3 +14,4 @@ pymupdf==1.24.10
 pillow==10.4.0
 pytesseract==0.3.13
 playwright==1.47.0
+minio==7.2.8

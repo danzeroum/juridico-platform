@@ -64,6 +64,20 @@ class TestReader:
         assert colmap["descricao"] == 1
         assert len(rows) == 2
 
+    def test_load_items_from_bytes(self):
+        # Caminho usado pelo worker: lê a planilha dos bytes vindos do MinIO.
+        from io import BytesIO
+
+        from services.fiscal.spreadsheet.reader import load_items_from_bytes
+
+        wb, _ws = _make_wb_with_formula()
+        buf = BytesIO()
+        wb.save(buf)
+        colmap, rows = load_items_from_bytes(buf.getvalue())
+        assert colmap["descricao"] == 1
+        assert len(rows) == 2
+        assert rows[0]["ncm_hint"] == "84713012"
+
 
 class TestWriter:
     def test_append_nao_altera_formula(self):
