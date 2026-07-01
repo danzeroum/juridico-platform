@@ -94,12 +94,18 @@ def finalize_enrichment(self, chunk_results: list[list[dict]], job_id: str, tena
 
 
 @app.task(bind=True, queue="fiscal", name="fiscal.tasks.enrich_spreadsheet")
-def enrich_spreadsheet(self, job_id: str, tenant_id: str, rows: list[dict], uf_origem: str = "SP") -> dict:
+def enrich_spreadsheet(self, job_id: str, tenant_id: str, spreadsheet_key: str, uf_origem: str = "SP") -> dict:
     """
-    Orquestra o enriquecimento: divide em chunks, dispara o chord (classify em
-    paralelo → finalize ancora uma vez). Assinatura estável (chamada pelo gateway).
+    Orquestra o enriquecimento: lê a planilha do MinIO (o gateway passa só a KEY,
+    não as linhas — evita payload enorme no Celery), divide em chunks e dispara o
+    chord (classify em paralelo → finalize ancora uma vez).
     """
     from celery import chord, group
+
+    from services.fiscal.spreadsheet.reader import load_items_from_bytes
+    from services.fiscal.storage import download_spreadsheet
+
+    _colmap, rows = load_items_from_bytes(download_spreadsheet(spreadsheet_key))
 
     chunks = [rows[i : i + _CHUNK] for i in range(0, len(rows), _CHUNK)]
     if not chunks:

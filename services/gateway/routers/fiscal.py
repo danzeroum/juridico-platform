@@ -13,7 +13,6 @@ Endpoints:
 """
 from __future__ import annotations
 
-import io
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
@@ -168,24 +167,29 @@ async def enrich(
     if uf_origem.upper() not in UF.__members__:
         raise HTTPException(status_code=400, detail="UF de origem inválida.")
 
-    from openpyxl import load_workbook
-
-    from services.fiscal.spreadsheet.reader import detect_columns, read_rows
+    from services.fiscal.spreadsheet.reader import load_items_from_bytes
 
     content = await file.read()
+    # Validação/contagem síncrona (feedback 400/413) — não trafega as linhas.
     try:
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        _colmap, rows = load_items_from_bytes(content)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Planilha inválida: {exc}") from exc
-    ws = wb.active
-    headers = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
-    rows = read_rows(ws, detect_columns(list(headers)))
-    wb.close()
 
     if len(rows) > _MAX_UPLOAD_ROWS:
         raise HTTPException(status_code=413, detail=f"Planilha excede o limite de {_MAX_UPLOAD_ROWS} linhas.")
 
     job_id = f"fiscal_{uuid.uuid4().hex[:16]}"
+
+    # Grava o arquivo no MinIO e passa só a KEY ao worker (evita payload enorme no
+    # Celery/Redis com as linhas inline — plano §3). O worker relê do MinIO.
+    spreadsheet_key = f"fiscal/uploads/{tenant_id}/{job_id}.xlsx"
+    try:
+        from services.fiscal.storage import upload_spreadsheet
+        upload_spreadsheet(spreadsheet_key, content)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Storage indisponível: {exc}") from exc
+
     try:
         from services.shared.redis_client import get_redis
         create_job = _lazy_create_job()
@@ -197,7 +201,7 @@ async def enrich(
         from celery import current_app as celery_app
         celery_app.send_task(
             "fiscal.tasks.enrich_spreadsheet",
-            args=[job_id, tenant_id, rows, uf_origem.upper()],
+            args=[job_id, tenant_id, spreadsheet_key, uf_origem.upper()],
             queue="fiscal",
         )
     except Exception as exc:

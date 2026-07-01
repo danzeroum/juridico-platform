@@ -67,11 +67,7 @@ def read_rows(ws: Any, colmap: dict[str, int | None]) -> list[dict[str, Any]]:
     return rows
 
 
-def load_items(path: str) -> tuple[dict[str, int | None], list[dict[str, Any]]]:
-    """Abre a planilha em modo somente-leitura e extrai (colmap, linhas)."""
-    from openpyxl import load_workbook
-
-    wb = load_workbook(path, read_only=True, data_only=True)
+def _extract(wb: Any) -> tuple[dict[str, int | None], list[dict[str, Any]]]:
     try:
         ws = wb.active
         headers = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
@@ -80,3 +76,19 @@ def load_items(path: str) -> tuple[dict[str, int | None], list[dict[str, Any]]]:
     finally:
         wb.close()
     return colmap, rows
+
+
+def load_items(path: str) -> tuple[dict[str, int | None], list[dict[str, Any]]]:
+    """Abre a planilha (caminho) em modo somente-leitura e extrai (colmap, linhas)."""
+    from openpyxl import load_workbook
+
+    return _extract(load_workbook(path, read_only=True, data_only=True))
+
+
+def load_items_from_bytes(data: bytes) -> tuple[dict[str, int | None], list[dict[str, Any]]]:
+    """Idem load_items, a partir dos bytes da planilha (lida do MinIO pelo worker)."""
+    import io
+
+    from openpyxl import load_workbook
+
+    return _extract(load_workbook(io.BytesIO(data), read_only=True, data_only=True))
