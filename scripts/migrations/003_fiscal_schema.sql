@@ -69,7 +69,9 @@ CREATE TABLE IF NOT EXISTS fiscal.ipi_aliquota (
 );
 
 -- 4. ICMS interestadual — fundamento é RESOLUÇÃO DO SENADO FEDERAL (22/1989, 13/2012),
---    NÃO CONFAZ. 4% aplica-se só a importados com conteúdo de importação > 40%.
+--    NÃO CONFAZ. A aliquota reduzida (quatro por cento) aplica-se a importados com
+--    conteudo de importacao acima de quarenta por cento (evita o sinal de porcento,
+--    que o psycopg2 interpretaria como placeholder em exec_driver_sql).
 CREATE TABLE IF NOT EXISTS fiscal.icms_interestadual (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     uf_origem          CHAR(2) NOT NULL,
