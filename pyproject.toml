@@ -37,6 +37,8 @@ omit = [
     "services/fiscal/repository.py",  # acesso a Postgres — testar em integração
     "services/fiscal/ingestion/browser.py",  # Playwright — teste real pula sem Chromium (CI)
     "services/fiscal/storage.py",  # MinIO — I/O externo, testar em E2E
+    "services/shared/storage/*",   # MinIO/OpenSearch/Neo4j — I/O externo, testar em E2E
+    "services/jurimetria/*",       # queries de banco — testar em integração/E2E
 ]
 
 [tool.coverage.report]

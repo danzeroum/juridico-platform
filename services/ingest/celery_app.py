@@ -15,10 +15,12 @@ app.conf.task_default_queue = 'daily'
 # executam. Lista apenas as tasks do app `ingest` (as de ingestão fiscal —
 # rfb_tipi/sefaz_scraper/confaz_ocr/ncm_history — rodam no worker fiscal).
 app.conf.include = [
+    'services.ingest.tasks.abj',
     'services.ingest.tasks.caged',
     'services.ingest.tasks.consumidor_gov',
     'services.ingest.tasks.datajud',
     'services.ingest.tasks.ibge',
+    'services.ingest.tasks.jurimetria_aggregate',
     'services.ingest.tasks.pgfn',
     'services.ingest.tasks.pncp',
     'services.ingest.tasks.receita',

@@ -28,6 +28,18 @@ class _Settings:
     def RECEITA_API_URL(self) -> str:
         return os.getenv("RECEITA_API_URL", "https://publica.cnpj.ws/cnpj")
 
+    # --- ABJ (Associação Brasileira de Jurimetria) ---
+    # Desligada por padrão: confirmar licença de redistribuição dos datasets
+    # abjData antes de habilitar em produção (ver ROPA / base legal por fonte).
+    @property
+    def ABJ_ENABLED(self) -> bool:
+        return os.getenv("ABJ_ENABLED", "false").lower() in ("1", "true", "yes")
+
+    @property
+    def ABJ_DATA_URL(self) -> str:
+        # CSV de indicadores (abjData / observatório). Vazio = usa semente local.
+        return os.getenv("ABJ_DATA_URL", "")
+
     @property
     def REDIS_URL(self) -> str:
         return os.getenv("REDIS_URL", "redis://localhost:6379/0")

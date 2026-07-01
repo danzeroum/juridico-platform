@@ -27,6 +27,7 @@ class DatajudProcessoBronze(BaseModel):
     resultado: str | None = None
     valor_causa: float | None = None
     classe: str | None = None
+    assunto: str | None = None  # código de assunto TPU (CNJ) — normalizado no silver
 
     # Partes (PII — pseudonimizado antes de storage)
     parte_cpf: str | None = None
@@ -79,6 +80,13 @@ class DatajudProcessoSilver(BaseModel):
     valor_causa: float | None = None
     valor_log: float = 0.0  # log1p(valor_causa) — feature para modelo
     cnpj_parte: str | None = None
+
+    # Normalização TPU (Resolução CNJ 46) — chaves canônicas de agregação
+    classe_tpu: str | None = None
+    classe_label: str | None = None
+    assunto_tpu: str | None = None
+    assunto_label: str | None = None
+    ramo: str | None = None  # TRABALHISTA | TRIBUTARIO | CONSUMIDOR | CIVEL | EMPRESARIAL | OUTRO
 
     # PII substituída por hashes HMAC
     parte_cpf_hash: str | None = None
