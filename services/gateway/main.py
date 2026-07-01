@@ -128,6 +128,7 @@ from services.gateway.routers import (  # noqa: E402
     contabilia,
     danobot,
     defensor,
+    early_warning,
     entidade,
     fiscal,
     forecasting,
@@ -138,6 +139,7 @@ from services.gateway.routers import (  # noqa: E402
     licitawatch,
     petibot,
     second_opinion,
+    settlement_optimizer,
     taxpredict,
 )
 
@@ -157,6 +159,8 @@ app.include_router(knowledge_graph.router, prefix="/api/v1/knowledge-graph")
 app.include_router(forecasting.router, prefix="/api/v1/forecasting")
 app.include_router(chamber_profiler.router, prefix="/api/v1/chamber-profiler")
 app.include_router(second_opinion.router, prefix="/api/v1/second-opinion")
+app.include_router(settlement_optimizer.router, prefix="/api/v1/settlement-optimizer")
+app.include_router(early_warning.router, prefix="/api/v1/early-warning")
 app.include_router(defensor.router, prefix="/api/v1/defensor")
 app.include_router(entidade.router, prefix="/api/v1/entidade")
 

@@ -42,6 +42,7 @@ omit = [
     "services/knowledge_graph/queries.py",  # I/O Neo4j — testar em E2E (analysis.py é testado)
     "services/forecasting/queries.py",       # queries de banco — núcleo forecast.py é testado
     "services/chamber_profiler/queries.py",  # queries de banco — núcleo profile.py é testado
+    "services/early_warning/queries.py",     # queries de banco — núcleo detect.py é testado
 ]
 
 [tool.coverage.report]
