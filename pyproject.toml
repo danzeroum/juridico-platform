@@ -40,6 +40,8 @@ omit = [
     "services/shared/storage/*",   # MinIO/OpenSearch/Neo4j — I/O externo, testar em E2E
     "services/jurimetria/*",       # queries de banco — testar em integração/E2E
     "services/knowledge_graph/queries.py",  # I/O Neo4j — testar em E2E (analysis.py é testado)
+    "services/forecasting/queries.py",       # queries de banco — núcleo forecast.py é testado
+    "services/chamber_profiler/queries.py",  # queries de banco — núcleo profile.py é testado
 ]
 
 [tool.coverage.report]
