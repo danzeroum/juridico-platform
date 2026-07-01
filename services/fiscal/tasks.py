@@ -1,27 +1,32 @@
 """
-Enriquecimento assíncrono de planilhas (Celery).
+Enriquecimento assíncrono de planilhas (Celery) — fan-out por CHORD.
 
 Correções do parecer técnico (plano §3):
-- NÃO usa ThreadPoolExecutor (classify é CPU-bound sob GIL; threads quebrariam o
-  escopo de SET LOCAL app.tenant_id). Processa em CHUNKS sequenciais. O scale-out
-  horizontal é feito dividindo o job em subtasks Celery (chord) por chunk e
-  aumentando réplicas do worker (--scale fiscal-worker=N) — todas do mesmo tenant.
+- Fan-out horizontal via chord: `group(classify_chunk)` processa os chunks em
+  paralelo entre réplicas do worker (--scale fiscal-worker=N), e o finalizer ancora
+  o lote UMA vez. NÃO usa ThreadPoolExecutor (classify é CPU-bound sob GIL; threads
+  quebrariam o escopo de SET LOCAL app.tenant_id). Cada subtask é do mesmo tenant.
 - Decision Ledger: UMA única entrada por JOB (raiz Merkle do lote), nunca 1 por
-  item (evita O(N²) — ver Pendencia.md QT-08). decision_proof por item = prova de
-  inclusão na árvore do lote.
-- triage_item gravado em BULK (repository.bulk_insert_triage_items).
+  item (evita O(N²) — Pendencia.md QT-08). decision_proof por item = prova de
+  inclusão na árvore do lote (leaf_index + raiz ancorada).
+- triage_item gravado em BULK.
 
-Coberto por testes de integração/E2E (ver pyproject omit).
+Coberto por E2E (broker + worker + Postgres). A serialização result↔dict usada no
+transporte do chord e a ancoragem são testadas de verdade nos unit tests.
 """
 from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
 
-from services.fiscal.batch.anchor import batch_manifest_hash, build_batch_anchor
+from services.fiscal.batch.anchor import (
+    batch_manifest_hash,
+    build_batch_anchor,
+    serialize_result,
+)
 from services.fiscal.celery_app import app
 from services.fiscal.repository import bulk_insert_triage_items, classify_one
-from services.shared.contracts.fiscal import UF, NcmTriageRequest
+from services.shared.contracts.fiscal import UF, NcmTriageRequest, NcmTriageResult
 
 logger = logging.getLogger(__name__)
 
@@ -43,32 +48,29 @@ def _to_request(row: dict, uf_origem: str) -> NcmTriageRequest | None:
     )
 
 
-@app.task(bind=True, queue="fiscal", name="fiscal.tasks.enrich_spreadsheet")
-def enrich_spreadsheet(
-    self,
-    job_id: str,
-    tenant_id: str,
-    rows: list[dict],
-    uf_origem: str = "SP",
-) -> dict:
-    """
-    Classifica os itens de uma planilha (já lidos em `rows`), ancora o lote no
-    Decision Ledger (1 entrada) e grava os itens em bulk. Retorna resumo do job.
+@app.task(bind=True, queue="fiscal", name="fiscal.tasks.classify_chunk")
+def classify_chunk(self, rows: list[dict], uf_origem: str) -> list[dict]:
+    """Classifica um chunk de linhas. Retorna NcmTriageResult serializados (JSON)."""
+    out: list[dict] = []
+    for row in rows:
+        req = _to_request(row, uf_origem)
+        if req is None:
+            continue
+        out.append(classify_one(req).model_dump(mode="json"))
+    return out
 
-    `rows`: lista de dicts {row, descricao, ncm_hint, uf} (services/fiscal/spreadsheet/reader).
+
+@app.task(bind=True, queue="fiscal", name="fiscal.tasks.finalize_enrichment")
+def finalize_enrichment(self, chunk_results: list[list[dict]], job_id: str, tenant_id: str) -> dict:
+    """
+    Callback do chord: junta os chunks (na ordem do group), ancora o lote no Ledger
+    (1 entrada) e grava os itens em bulk.
     """
     from services.shared.ledger.merkle import PostgresDecisionLedger
 
-    results = []
-    for start in range(0, len(rows), _CHUNK):
-        for row in rows[start : start + _CHUNK]:
-            req = _to_request(row, uf_origem)
-            if req is None:
-                continue
-            results.append(classify_one(req))
-        logger.info("job %s: %d/%d itens classificados", job_id, len(results), len(rows))
+    dicts = [d for chunk in chunk_results for d in (chunk or [])]
+    results = [NcmTriageResult(**d) for d in dicts]
 
-    # Ancoragem: 1 raiz Merkle do lote, 1 entrada no Ledger para o job inteiro.
     anchor = build_batch_anchor(results)
     ledger = PostgresDecisionLedger(tenant_id)
     entry = ledger.add_entry(
@@ -78,31 +80,31 @@ def enrich_spreadsheet(
         outputs={"batch_merkle_root": anchor["root"], "count": anchor["count"]},
         sources=["TIPI", "SENADO", "SEFAZ"],
     )
-
-    # Persistência dos itens em bulk (decision_proof = índice da folha + raiz ancorada).
-    items = [
-        {
-            "leaf_index": i,
-            "sku_descricao": r.sku_descricao,
-            "ncm_sugerido": r.suggested_ncm.ncm_codigo if r.suggested_ncm else None,
-            "confidence": r.suggested_ncm.confidence if r.suggested_ncm else None,
-            "fonte_regra": r.suggested_ncm.fonte_regra.value if r.suggested_ncm else None,
-            "icms_interno_efetivo_pct": r.icms.interna_efetiva_pct,
-            "icms_inter_pct": r.icms.interestadual_pct,
-            "difal_pct": r.icms.difal_pct,
-            "categoria": r.categoria,
-            "conflito": r.conflito_detectado,
-            "observacoes": r.observacoes,
-        }
-        for i, r in enumerate(results)
-    ]
-    bulk_insert_triage_items(tenant_id, job_id, items)
-
+    bulk_insert_triage_items(
+        tenant_id, job_id, [serialize_result(i, r) for i, r in enumerate(results)]
+    )
+    logger.info("job %s: %d itens ancorados (raiz %s)", job_id, anchor["count"], anchor["root"][:12])
     return {
         "job_id": job_id,
-        "processed": len(results),
-        "total": len(rows),
+        "processed": anchor["count"],
         "batch_merkle_root": anchor["root"],
         "ledger_entry_index": entry["entry_index"],
         "completed_at": datetime.now(UTC).isoformat(),
     }
+
+
+@app.task(bind=True, queue="fiscal", name="fiscal.tasks.enrich_spreadsheet")
+def enrich_spreadsheet(self, job_id: str, tenant_id: str, rows: list[dict], uf_origem: str = "SP") -> dict:
+    """
+    Orquestra o enriquecimento: divide em chunks, dispara o chord (classify em
+    paralelo → finalize ancora uma vez). Assinatura estável (chamada pelo gateway).
+    """
+    from celery import chord, group
+
+    chunks = [rows[i : i + _CHUNK] for i in range(0, len(rows), _CHUNK)]
+    if not chunks:
+        return finalize_enrichment.run([], job_id, tenant_id)
+
+    callback = finalize_enrichment.s(job_id, tenant_id)
+    chord(group(classify_chunk.s(c, uf_origem) for c in chunks))(callback)
+    return {"job_id": job_id, "chunks": len(chunks), "status": "dispatched"}

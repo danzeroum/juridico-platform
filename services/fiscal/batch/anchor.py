@@ -83,3 +83,21 @@ def verify_inclusion(proof: dict[str, Any]) -> bool:
 def batch_manifest_hash(job_id: str, tenant_id: str, count: int) -> str:
     """Hash do manifesto de entrada do lote — gravado no Ledger junto da raiz."""
     return _sha256(json.dumps({"job_id": job_id, "tenant_id": tenant_id, "count": count}, sort_keys=True))
+
+
+def serialize_result(index: int, result: NcmTriageResult) -> dict[str, Any]:
+    """Converte um NcmTriageResult numa linha de fiscal.triage_item (bulk insert)."""
+    ncm = result.suggested_ncm
+    return {
+        "leaf_index": index,
+        "sku_descricao": result.sku_descricao,
+        "ncm_sugerido": ncm.ncm_codigo if ncm else None,
+        "confidence": ncm.confidence if ncm else None,
+        "fonte_regra": ncm.fonte_regra.value if ncm else None,
+        "icms_interno_efetivo_pct": result.icms.interna_efetiva_pct,
+        "icms_inter_pct": result.icms.interestadual_pct,
+        "difal_pct": result.icms.difal_pct,
+        "categoria": result.categoria,
+        "conflito": result.conflito_detectado,
+        "observacoes": result.observacoes,
+    }

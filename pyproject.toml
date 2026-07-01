@@ -35,6 +35,7 @@ omit = [
     "services/fiscal/tasks.py",       # tarefa Celery — requer broker, testar em integração
     "services/fiscal/celery_app.py",
     "services/fiscal/repository.py",  # acesso a Postgres — testar em integração
+    "services/fiscal/ingestion/browser.py",  # Playwright — teste real pula sem Chromium (CI)
 ]
 
 [tool.coverage.report]
