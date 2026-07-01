@@ -128,6 +128,7 @@ from services.gateway.routers import (  # noqa: E402
     danobot,
     defensor,
     entidade,
+    fiscal,
     health,
     legalscore,
     licitawatch,
@@ -141,6 +142,7 @@ app.include_router(legalscore.router, prefix="/api/v1/legalscore")
 app.include_router(contabilia.router, prefix="/api/v1/contabilia")
 app.include_router(compliance.router, prefix="/api/v1/compliance")
 app.include_router(taxpredict.router, prefix="/api/v1/taxpredict")
+app.include_router(fiscal.router, prefix="/api/v1/fiscal")
 app.include_router(licitawatch.router, prefix="/api/v1/licitawatch")
 app.include_router(petibot.router, prefix="/api/v1/petibot")
 app.include_router(danobot.router, prefix="/api/v1/danobot")

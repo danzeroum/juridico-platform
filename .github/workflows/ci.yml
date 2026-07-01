@@ -45,6 +45,8 @@ jobs:
             pytest-asyncio==0.24.0 \
             "PyJWT[crypto]==2.9.0" \
             cryptography==43.0.3 \
+            openpyxl==3.1.5 \
+            rapidfuzz==3.10.1 \
             "sqlalchemy>=2.0,<3" || true
 
       - name: Run unit tests with coverage
@@ -222,6 +224,8 @@ jobs:
             pydantic==2.9.2 \
             pytest==8.3.3 \
             pytest-asyncio==0.24.0 \
+            openpyxl==3.1.5 \
+            rapidfuzz==3.10.1 \
             "sqlalchemy>=2.0,<3" \
             psycopg2-binary==2.9.9
 
@@ -229,6 +233,7 @@ jobs:
         run: |
           python scripts/migrate.py
           python scripts/migrate.py   # segunda execução: deve ser no-op
+          python scripts/seed_fiscal.py   # seed fiscal (interestadual + SP/RJ/MG)
         env:
           MIGRATIONS_DATABASE_URL: postgresql://juridico:testpassword@localhost:5432/juridico_platform
 
