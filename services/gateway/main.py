@@ -131,6 +131,7 @@ from services.gateway.routers import (  # noqa: E402
     fiscal,
     health,
     jurimetria,
+    knowledge_graph,
     legalscore,
     licitawatch,
     petibot,
@@ -149,6 +150,7 @@ app.include_router(petibot.router, prefix="/api/v1/petibot")
 app.include_router(danobot.router, prefix="/api/v1/danobot")
 app.include_router(concilia.router, prefix="/api/v1/concilia")
 app.include_router(jurimetria.router, prefix="/api/v1/jurimetria")
+app.include_router(knowledge_graph.router, prefix="/api/v1/knowledge-graph")
 app.include_router(defensor.router, prefix="/api/v1/defensor")
 app.include_router(entidade.router, prefix="/api/v1/entidade")
 

@@ -98,6 +98,56 @@ def upsert_process_edges(records: list[dict[str, Any]], driver: Any | None = Non
     return len(rows)
 
 
+def company_processes(cnpj: str, limit: int = 100, driver: Any | None = None) -> list[dict[str, Any]]:
+    """Processos ligados a uma empresa (produto Knowledge Graph). Read-only."""
+    query = """
+    MATCH (c:Empresa {cnpj: $cnpj})-[:PARTE_EM]->(p:Processo)
+    RETURN p.id AS id, p.tribunal AS tribunal, p.classe AS classe_tpu,
+           p.assunto AS assunto_tpu, p.ramo AS ramo,
+           p.data_julgamento AS data_julgamento
+    ORDER BY p.data_julgamento DESC
+    LIMIT $limit
+    """
+    driver = driver or _get_driver()
+    with driver.session() as session:
+        return [dict(r) for r in session.run(query, cnpj=cnpj, limit=limit)]
+
+
+def litigant_network(cnpj: str, limit: int = 50, driver: Any | None = None) -> list[dict[str, Any]]:
+    """
+    Rede de co-litigância (produto Litigant Network Analysis): empresas que
+    compartilham ao menos um processo com a empresa-alvo, ordenadas pelo número
+    de processos em comum. Só CNPJ↔CNPJ (dados públicos). Read-only.
+    """
+    query = """
+    MATCH (c:Empresa {cnpj: $cnpj})-[:PARTE_EM]->(p:Processo)<-[:PARTE_EM]-(outra:Empresa)
+    WHERE outra.cnpj <> $cnpj
+    RETURN outra.cnpj AS cnpj, count(DISTINCT p) AS processos_em_comum,
+           collect(DISTINCT p.ramo)[..5] AS ramos
+    ORDER BY processos_em_comum DESC
+    LIMIT $limit
+    """
+    driver = driver or _get_driver()
+    with driver.session() as session:
+        return [dict(r) for r in session.run(query, cnpj=cnpj, limit=limit)]
+
+
+def graph_stats(driver: Any | None = None) -> dict[str, Any]:
+    """Contagens globais do grafo (produto Knowledge Graph). Read-only."""
+    query = """
+    MATCH (e:Empresa) WITH count(e) AS empresas
+    MATCH (p:Processo) WITH empresas, count(p) AS processos
+    MATCH (:Empresa)-[r:PARTE_EM]->(:Processo)
+    RETURN empresas, processos, count(r) AS arestas
+    """
+    driver = driver or _get_driver()
+    with driver.session() as session:
+        rec = session.run(query).single()
+    if rec is None:
+        return {"empresas": 0, "processos": 0, "arestas": 0}
+    return {"empresas": rec["empresas"], "processos": rec["processos"], "arestas": rec["arestas"]}
+
+
 def count_processos_por_cnpj(cnpj: str, driver: Any | None = None) -> dict[str, Any]:
     """
     Consulta usada pelo feature assembler do LegalScore (plano B.6).
