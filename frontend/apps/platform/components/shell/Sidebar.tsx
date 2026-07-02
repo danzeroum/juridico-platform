@@ -10,6 +10,7 @@ interface NavItem {
   label: string
   href: string
   locked?: boolean
+  tip?: string
 }
 
 const PLATAFORMA_NAV: NavItem[] = [
@@ -20,17 +21,32 @@ const PLATAFORMA_NAV: NavItem[] = [
   { code: 'CF', label: 'Conformidade', href: '/conformidade' },
 ]
 
+const INTELIGENCIA_NAV: NavItem[] = [
+  { code: 'JM', label: 'Jurimetria', href: '/jurimetria', tip: 'Indicadores agregados por tribunal/classe/assunto' },
+  { code: 'KG', label: 'Knowledge Graph', href: '/knowledge-graph', tip: 'Processos de uma empresa + rede de co-litigância' },
+  { code: 'FC', label: 'Forecasting', href: '/forecasting', tip: 'Projeção de volume futuro de ações' },
+  { code: 'CP', label: 'Chamber Profiler', href: '/chamber-profiler', tip: 'Perfil agregado do órgão julgador — nunca por juiz' },
+  { code: 'SO', label: 'Second Opinion', href: '/second-opinion', tip: 'Parecer de consenso entre LegalScore/TaxPredict/jurimetria' },
+  { code: 'ST', label: 'Settlement Optimizer', href: '/settlement', tip: 'Zona de acordo (ZOPA) por análise de decisão' },
+  { code: 'EW', label: 'Early Warning', href: '/early-warning', tip: 'Surtos de volume e picos de congestionamento' },
+]
+
 const PRODUTOS_NAV: NavItem[] = [
   { code: 'LS', label: 'LegalScore', href: '/legalscore' },
   { code: 'CT', label: 'ContabilIA', href: '/contabilia' },
   { code: 'CR', label: 'ComplianceRadar', href: '/compliance-radar' },
   { code: 'TP', label: 'TaxPredict', href: '/taxpredict' },
+  { code: 'FI', label: 'Fiscal', href: '/fiscal', tip: 'Triagem NCM/ICMS + enriquecimento em lote' },
   { code: 'LW', label: 'LicitaWatch', href: '/licita-watch' },
   { code: 'DB', label: 'DanoBot', href: '/danobot', locked: true },
   { code: 'PB', label: 'PetiBot', href: '/petibot' },
   { code: 'DF', label: 'Defensor', href: '/defensor' },
   { code: 'CC', label: 'ConciliaIA', href: '/concilia' },
   { code: 'TC', label: 'TribunaConnect', href: '/tribuna' },
+]
+
+const ADMIN_NAV: NavItem[] = [
+  { code: 'IG', label: 'Ingestão & Saúde de Dados', href: '/admin/ingestao', tip: 'Operar/observar o pipeline por fonte (admin)' },
 ]
 
 export function Sidebar() {
@@ -81,6 +97,31 @@ export function Sidebar() {
             <NavLink key={item.href} item={item} pathname={pathname} />
           ))}
         </div>
+
+        <div className="my-3 border-t" style={{ borderColor: '#1a2d4e' }} />
+
+        <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#4a6080' }}>
+          Inteligência · Jurimetria
+        </p>
+        <div className="flex flex-col gap-0.5">
+          {INTELIGENCIA_NAV.map((item) => (
+            <NavLink key={item.href} item={item} pathname={pathname} />
+          ))}
+        </div>
+
+        {role === 'admin' && (
+          <>
+            <div className="my-3 border-t" style={{ borderColor: '#1a2d4e' }} />
+            <p className="px-2 mb-1 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: '#4a6080' }}>
+              Admin · Dados
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {ADMIN_NAV.map((item) => (
+                <NavLink key={item.href} item={item} pathname={pathname} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Footer: user */}
@@ -114,6 +155,8 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       href={item.locked ? '#' : item.href}
       aria-current={isActive ? 'page' : undefined}
       aria-disabled={item.locked}
+      title={item.tip}
+      data-tip={item.tip}
       className={cn(
         'flex items-center gap-2.5 px-2.5 py-1.5 rounded-[6px] transition-colors duration-[120ms]',
         isActive

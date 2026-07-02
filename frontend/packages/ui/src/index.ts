@@ -41,6 +41,17 @@ export { RbacGate, ViewerBanner } from './patterns/RbacGate'
 
 export { EmptyState } from './patterns/EmptyState'
 
+// Inteligência · Jurimetria + Fiscal + Admin Ingestão
+export { SourceChip } from './patterns/SourceChip'
+export type { Fonte } from './patterns/SourceChip'
+export { FaixaBadge } from './patterns/FaixaBadge'
+export type { FaixaTone } from './patterns/FaixaBadge'
+export { RelationBadge } from './patterns/RelationBadge'
+export type { Relacao } from './patterns/RelationBadge'
+export { CircuitBreakerBadge, FreshnessBandChip, ingestFreshnessBand } from './patterns/CircuitBreakerBadge'
+export type { CircuitBreakerState } from './patterns/CircuitBreakerBadge'
+export { GaugeDonut } from './patterns/GaugeDonut'
+
 // Defensor (lente DF) — agente de IA
 export { EventStatusDot, EVENT_STATUS_COLORS, EVENT_STATUS_LABELS } from './patterns/EventStatusDot'
 export type { EventStatus } from './patterns/EventStatusDot'
