@@ -59,6 +59,9 @@ services:
           memory: 512M
           cpus: "0.5"
 
+# Mesma declaração dos demais arquivos incluídos pelo docker-compose.yml raiz
+# (`external: true` conflitava com a definição do include e deixava o serviço
+# fora do `make up`).
 networks:
   juridico-net:
-    external: true
+    driver: bridge

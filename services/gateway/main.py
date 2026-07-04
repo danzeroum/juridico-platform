@@ -53,7 +53,6 @@ async def lifespan(app: FastAPI):
     """Setup de observabilidade no startup."""
     _setup_logging()
     _setup_otel()
-    _setup_prometheus(app)
     logger.info("Gateway iniciado. Versão 0.2.0")
     yield
     logger.info("Gateway encerrando.")
@@ -98,6 +97,9 @@ def _setup_otel() -> None:
 
 
 def _setup_prometheus(app: FastAPI) -> None:
+    # DEVE rodar no import (antes do startup): instrument() adiciona middleware,
+    # e o Starlette proíbe add_middleware após o app iniciar — chamar isso no
+    # lifespan derruba o boot do uvicorn (RuntimeError).
     if not _PROM_AVAILABLE:
         logger.warning("prometheus-fastapi-instrumentator não instalado — métricas desabilitadas.")
         return
@@ -163,6 +165,8 @@ app.include_router(settlement_optimizer.router, prefix="/api/v1/settlement-optim
 app.include_router(early_warning.router, prefix="/api/v1/early-warning")
 app.include_router(defensor.router, prefix="/api/v1/defensor")
 app.include_router(entidade.router, prefix="/api/v1/entidade")
+
+_setup_prometheus(app)
 
 
 # ---------------------------------------------------------------------------

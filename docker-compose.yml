@@ -5,8 +5,10 @@
 
 include:
   - docker/compose/base.yml
+  - docker/compose/gateway.yml
   - docker/compose/monitoring.yml
   - docker/compose/ingest.yml
+  - docker/compose/fiscal.yml
   - docker/compose/ollama.yml
   - docker/compose/traefik.yml
   - docker/compose/frontend.yml

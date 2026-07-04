@@ -151,6 +151,35 @@ jobs:
           echo "OK: traefik sem --api.insecure=true"
 
   # ---------------------------------------------------------------------------
+  # Validação do compose: includes resolvem, Dockerfiles referenciados existem,
+  # env interpola. Teria detectado o serviço gateway ausente do stack raiz.
+  # ---------------------------------------------------------------------------
+  compose-validate:
+    name: Docker Compose Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate root compose (with .env.example)
+        run: |
+          cp .env.example .env
+          docker compose -f docker-compose.yml config --quiet
+          echo "OK: docker-compose.yml resolve todos os includes e variáveis"
+
+      - name: Check core services present in merged config
+        run: |
+          services=$(docker compose -f docker-compose.yml config --services)
+          for svc in gateway postgres pgbouncer redis celery-worker fiscal-worker platform prometheus grafana; do
+            if ! echo "$services" | grep -qx "$svc"; then
+              echo "FALHA: serviço '$svc' ausente do compose raiz" >&2
+              exit 1
+            fi
+          done
+          echo "OK: todos os serviços núcleo presentes"
+
+  # ---------------------------------------------------------------------------
   # Verificação de anti-patterns de código
   # ---------------------------------------------------------------------------
   api-antipatterns:

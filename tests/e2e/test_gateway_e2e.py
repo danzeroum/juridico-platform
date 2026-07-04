@@ -56,6 +56,24 @@ class TestHealth:
         body = resp.json()
         assert body.get("status") in ("ok", "healthy")
 
+    def test_ready_sem_auth_e_reporta_checks(self, client):
+        # Sem REDIS_URL/DATABASE_URL no ambiente de teste: dependências ficam
+        # not_configured e a prontidão não falha (dev/teste sem stack completo).
+        resp = client.get("/api/v1/ready")
+        assert resp.status_code in (200, 503)
+        body = resp.json()
+        assert body["status"] in ("ready", "not_ready")
+        assert set(body["checks"].keys()) == {"redis", "postgres"}
+        for valor in body["checks"].values():
+            assert valor == "ok" or valor == "not_configured" or valor.startswith("fail")
+
+    def test_ready_nao_configurado_retorna_200(self, client, monkeypatch):
+        monkeypatch.delenv("REDIS_URL", raising=False)
+        monkeypatch.delenv("DATABASE_URL", raising=False)
+        resp = client.get("/api/v1/ready")
+        assert resp.status_code == 200
+        assert resp.json()["checks"] == {"redis": "not_configured", "postgres": "not_configured"}
+
     def test_openapi_spec_disponivel(self, client):
         resp = client.get("/openapi.json")
         assert resp.status_code == 200
@@ -113,6 +131,22 @@ class TestLegalScore:
         assert "request_id" in body
         assert body["contract_version"] == "scoring/v1"
 
+    def test_score_stub_e_rotulado_como_sintetico(self, client, auth):
+        # Sem Redis no ambiente de teste, o caminho de features cai no stub —
+        # a resposta DEVE se auto-declarar sintética (engine + disclaimer).
+        resp = client.post(
+            "/api/v1/legalscore/score",
+            json={"cnpj": "12345678000195"},
+            headers=auth,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        if body["engine"] == "stub":
+            assert "SINTÉTICO" in body["disclaimer"]
+        else:
+            # Features reais disponíveis: nunca deve alegar ser stub
+            assert "SINTÉTICO" not in body["disclaimer"]
+
     def test_score_cnpj_invalido_retorna_422_problem_json(self, client, auth):
         resp = client.post(
             "/api/v1/legalscore/score",
@@ -138,6 +172,16 @@ class TestLegalScore:
         )
         # 202 se Celery/Redis disponível; 503 se offline — mas nunca 4xx
         assert resp.status_code in (202, 503)
+
+    def test_batch_cnpj_malformado_retorna_422(self, client, auth):
+        resp = client.post(
+            "/api/v1/legalscore/batch",
+            json={"cnpjs": ["12345678000195", "12.345.678/0001-95", "abc"]},
+            headers=auth,
+        )
+        assert resp.status_code == 422
+        assert "problem+json" in resp.headers.get("content-type", "")
+        assert "CNPJs inválidos" in resp.json()["detail"]
 
     def test_model_metrics_retorna_200(self, client, auth):
         resp = client.get("/api/v1/legalscore/model-metrics", headers=auth)
