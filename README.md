@@ -9,17 +9,35 @@
 
 ## Produtos
 
-| # | Produto | Descrição | SLA |
-|---|---------|-----------|-----|
-| 1 | **LegalScore PJ** | Rating de risco jurídico-financeiro de PJ | p95 < 1.5s |
-| 2 | **ContabilIA** | Auditoria contábil automatizada | p95 < 60s |
-| 3 | **ComplianceRadar** | Monitoramento municipal com alertas | 99% alertas |
-| 4 | **TaxPredict** | Previsão bayesiana de desfecho tributário | p95 < 3s |
-| 5 | **LicitaWatch** | Monitoramento de licitações (PNCP) | Diário |
-| 6 | **DanoBot** | Laudo de danos socioeconômicos automatizado | p95 < 5s |
-| 7 | **PetiBot** | Gerador de peças processuais com jurisprudência | p95 < 10s |
-| 8 | **ConciliaIA** | Análise de viabilidade de acordos | p95 < 3s |
-| 9 | **FiscalEngine** | Triagem de NCM + resolução de ICMS (interno/interestadual/DIFAL) e enriquecimento de planilhas | p95 < 2s (triagem) |
+| # | Produto | Descrição | SLA | Status |
+|---|---------|-----------|-----|--------|
+| 1 | **LegalScore PJ** | Rating de risco jurídico-financeiro de PJ | p95 < 1.5s | ✅ API ativa (heurística¹) |
+| 2 | **ContabilIA** | Auditoria contábil automatizada | p95 < 60s | ✅ API ativa |
+| 3 | **ComplianceRadar** | Monitoramento municipal com alertas | 99% alertas | ✅ API ativa |
+| 4 | **TaxPredict** | Previsão bayesiana de desfecho tributário | p95 < 3s | ✅ API ativa |
+| 5 | **LicitaWatch** | Monitoramento de licitações (PNCP) | Diário | ✅ API ativa |
+| 6 | **DanoBot** | Laudo de danos socioeconômicos automatizado | p95 < 5s | ⛔ Bloqueado — aguarda parecer DPO (PD-06); endpoint retorna 501 |
+| 7 | **PetiBot** | Gerador de peças processuais com jurisprudência | p95 < 10s | ✅ API ativa |
+| 8 | **ConciliaIA** | Análise de viabilidade de acordos | p95 < 3s | ✅ API ativa |
+| 9 | **FiscalEngine** | Triagem de NCM + resolução de ICMS (interno/interestadual/DIFAL) e enriquecimento de planilhas | p95 < 2s (triagem) | ✅ API ativa |
+
+¹ *Rotulado como heurística até validação com desfechos reais (ver `pendencias.md` item 4). Respostas incluem `disclaimer` explícito.*
+
+### Módulos analíticos (APIs adicionais no gateway)
+
+Além dos 9 produtos, o gateway expõe módulos analíticos completos (com testes):
+
+| Módulo | Rota base | Descrição |
+|--------|-----------|-----------|
+| **Jurimetria** | `/api/v1/jurimetria` | Indicadores jurimétricos (DATAJUD + ABJ/TPU) |
+| **Knowledge Graph** | `/api/v1/knowledge-graph` | Grafo Empresa→Processo + rede de litigantes (Neo4j) |
+| **Forecasting** | `/api/v1/forecasting` | Previsão de demanda judicial (heurística¹) |
+| **Chamber Profiler** | `/api/v1/chamber-profiler` | Perfil decisório por tribunal+classe |
+| **Second Opinion** | `/api/v1/second-opinion` | Consenso ponderado entre modelos (heurística¹) |
+| **Settlement Optimizer** | `/api/v1/settlement-optimizer` | Otimização de proposta de acordo |
+| **Early Warning** | `/api/v1/early-warning` | Detecção precoce de risco processual |
+| **Defensor** | `/api/v1/defensor` | Automação de protocolo (Consumidor.gov/Procon — drivers em scaffold) |
+| **Entidade** | `/api/v1/entidade` | Consulta consolidada de entidade (CNPJ) |
 
 ## Stack Tecnológico
 

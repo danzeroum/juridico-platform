@@ -17,7 +17,7 @@ import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from services.scoring.engine.factory import get_score_engine
 from services.scoring.features import assemble_features
@@ -118,6 +118,20 @@ class ScoreResponse(BaseModel):
 
 class BatchScoreRequest(BaseModel):
     cnpjs: list[str] = Field(..., min_length=1, max_length=1000)
+
+    @field_validator("cnpjs")
+    @classmethod
+    def _cnpjs_validos(cls, v: list[str]) -> list[str]:
+        # Mesma regra do /score singular: 14 dígitos sem formatação. Sem isso,
+        # um CNPJ malformado passa para o worker e explode em _stub_score (500).
+        invalidos = [c for c in v if not (len(c) == 14 and c.isdigit())]
+        if invalidos:
+            amostra = ", ".join(repr(c) for c in invalidos[:5])
+            raise ValueError(
+                f"CNPJs inválidos (esperado 14 dígitos sem formatação): {amostra}"
+                + (f" e mais {len(invalidos) - 5}" if len(invalidos) > 5 else "")
+            )
+        return v
 
 
 # ---------------------------------------------------------------------------
@@ -503,8 +517,19 @@ async def audit_trail(request_id: str, request: Request) -> Any:
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
+_STUB_DISCLAIMER = (
+    "SINTÉTICO — score gerado por stub determinístico porque as features de "
+    "ingestão não estavam disponíveis (Redis offline ou sem dados). "
+    "NÃO usar para decisão de crédito/risco. " + _SCORE_DISCLAIMER
+)
+
+
 def _stub_score(cnpj: str, request_id: str) -> ScoreResponse:
-    """Stub determinístico para o endpoint de referência. Fase 1b substituirá por score real."""
+    """Stub determinístico usado apenas quando as features estão indisponíveis.
+
+    A resposta é explicitamente rotulada (engine="stub" + disclaimer) para que
+    consumidores nunca confundam o valor sintético com um score real.
+    """
     digit_sum = sum(int(d) for d in cnpj)
     score = max(0, min(1000, 500 + (digit_sum % 400) - 200))
     return ScoreResponse(
@@ -514,6 +539,8 @@ def _stub_score(cnpj: str, request_id: str) -> ScoreResponse:
         confidence_interval=[max(0, score - 78), min(1000, score + 78)],
         breakdown={},
         request_id=request_id,
+        engine="stub",
+        disclaimer=_STUB_DISCLAIMER,
     )
 
 

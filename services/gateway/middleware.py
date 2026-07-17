@@ -32,6 +32,11 @@ logger = logging.getLogger(__name__)
 _PUBLIC_PATHS = {
     "/health",
     "/api/v1/health",
+    "/ready",
+    "/api/v1/ready",
+    # Scrape do Prometheus (rede interna; porta 8000 não é pública — só Traefik
+    # roteia /api, e /metrics fica fora desse prefixo)
+    "/metrics",
     "/.well-known/jwks.json",
     "/api/v1/auth/token",
     "/openapi.json",

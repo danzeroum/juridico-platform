@@ -1,0 +1,59 @@
+# =============================================================================
+# GATEWAY - FastAPI (todos os produtos) — porta interna 8000
+# Rota pública via Traefik: https://${DOMAIN}/api  →  gateway:8000
+# O frontend (docker/compose/frontend.yml) fala com http://gateway:8000.
+# `make health` usa http://localhost:8000/api/v1/health (bind 127.0.0.1).
+# =============================================================================
+
+services:
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    container_name: gateway
+    restart: unless-stopped
+    environment:
+      - ENV=${ENV:-production}
+      # Conecta via PgBouncer (pool_mode=transaction) como app_user (NOSUPERUSER)
+      # — RLS ativa. Mesmo padrão de docker/products/legalscore/compose.override.yml.
+      - DATABASE_URL=postgresql://app_user:${APP_USER_PASSWORD}@pgbouncer:6432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - HMAC_KEY=${HMAC_KEY}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY:-}
+      - JWT_PUBLIC_KEY=${JWT_PUBLIC_KEY:-}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    ports:
+      # Apenas loopback: acesso externo é via Traefik (443). O bind local serve
+      # ao `make health` e a debugging no nó único.
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=5)\""]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - juridico-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.gateway.entrypoints=websecure"
+      - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8000"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2"
+
+networks:
+  juridico-net:
+    driver: bridge
