@@ -56,4 +56,13 @@ export const PRODUCT_CODES = {
   auditoria: 'AU',
   conformidade: 'CF',
   configuracoes: 'CG',
+  jurimetria: 'JM',
+  knowledgeGraph: 'KG',
+  forecasting: 'FC',
+  chamberProfiler: 'CP',
+  secondOpinion: 'SO',
+  settlementOptimizer: 'ST',
+  earlyWarning: 'EW',
+  fiscal: 'FI',
+  adminIngestao: 'IG',
 } as const
